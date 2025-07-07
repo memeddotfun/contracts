@@ -5,16 +5,60 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract MemedToken is ERC20, Ownable {
-    uint256 public constant MAX_SUPPLY = 1_000_000_000 * 1e18;
+    uint256 public constant MAX_SUPPLY = 1_000_000_000 * 1e18; // 1B tokens
+    
+    // Token distribution according to tokenomics v2
+    uint256 public constant FAIR_LAUNCH_ALLOCATION = (MAX_SUPPLY * 20) / 100; // 200M (20%)
+    uint256 public constant STAKING_REWARDS_ALLOCATION = (MAX_SUPPLY * 20) / 100; // 200M (20%)
+    uint256 public constant CREATOR_INCENTIVES_ALLOCATION = (MAX_SUPPLY * 15) / 100; // 150M (15%)
+    uint256 public constant ENGAGEMENT_REWARDS_ALLOCATION = (MAX_SUPPLY * 15) / 100; // 150M (15%)
+    uint256 public constant UNISWAP_LP_ALLOCATION = (MAX_SUPPLY * 30) / 100; // 300M (30%)
+    
+    address public stakingContract;
+    address public engageToEarnContract;
+    address public factoryContract;
+    address public creator;
+    
+    bool public fairLaunchCompleted;
+    uint256 public fairLaunchTokensMinted;
+    
     constructor(
         string memory _name,
         string memory _ticker,
         address _creator,
-        address staking,
-        address engageToEarn
+        address _staking,
+        address _engageToEarn
     ) ERC20(_name, _ticker) Ownable() {
-        _mint(staking, (MAX_SUPPLY * 58) / 100);
-        _mint(engageToEarn, (MAX_SUPPLY * 40) / 100);
+        creator = _creator;
+        stakingContract = _staking;
+        engageToEarnContract = _engageToEarn;
+        factoryContract = msg.sender;
+        
+        // Initial distribution
+        _mint(_staking, STAKING_REWARDS_ALLOCATION);
+        _mint(_engageToEarn, ENGAGEMENT_REWARDS_ALLOCATION);
+        
+        // Creator gets initial allocation for staking in battles (10M minimum)
         _mint(_creator, 12_000_000 * 1e18);
+    }
+    
+    function mintFairLaunchTokens(address to, uint256 amount) external {
+        require(msg.sender == factoryContract, "Only factory can mint");
+        require(!fairLaunchCompleted, "Fair launch completed");
+        require(fairLaunchTokensMinted + amount <= FAIR_LAUNCH_ALLOCATION, "Exceeds fair launch allocation");
+        
+        fairLaunchTokensMinted += amount;
+        _mint(to, amount);
+    }
+    
+    function completeFairLaunch() external {
+        require(msg.sender == factoryContract, "Only factory can complete");
+        fairLaunchCompleted = true;
+    }
+    
+    function mintUniswapLP(address to) external {
+        require(msg.sender == factoryContract, "Only factory can mint");
+        require(fairLaunchCompleted, "Fair launch not completed");
+        _mint(to, UNISWAP_LP_ALLOCATION);
     }
 }
