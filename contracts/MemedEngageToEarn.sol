@@ -7,8 +7,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract MemedEngageToEarn is Ownable {
     uint256 public constant MAX_REWARD = 150_000_000 * 1e18; // 150M tokens for engagement rewards
-    uint256 public constant MAX_ENGAGE_USER_REWARD = (MAX_REWARD * 2) / 100;
-    uint256 public constant MAX_ENGAGE_CREATOR_REWARD = (MAX_REWARD * 1) / 100;
+    uint256 public constant MAX_ENGAGE_USER_REWARD = (MAX_REWARD * 2) / 100; // 100% to users
     uint256 public constant VESTING_DURATION = 15 days; // 15 days linear vesting
     uint256 public constant INSTANT_PERCENTAGE = 50; // 50% instant, 50% vested
     
@@ -27,18 +26,13 @@ contract MemedEngageToEarn is Ownable {
     mapping(address => uint256) public unlockedAmount;
     mapping(bytes32 => bool) public claimed;
     
-    // Creator vesting schedules (25% monthly over 4 months)
-    mapping(address => mapping(address => VestingSchedule[])) public creatorVesting; // token => creator => schedules
-    mapping(address => mapping(address => uint256)) public creatorVestingCount;
-    
     // User engagement vesting (50% instant, 50% over 15 days)
     mapping(address => mapping(address => VestingSchedule[])) public userVesting; // token => user => schedules
     mapping(address => mapping(address => uint256)) public userVestingCount;
 
     event Claimed(address indexed user, uint256 amount, uint256 index);
     event SetMerkleRoot(address indexed token, uint256 index, bytes32 root);
-    event Reward(address indexed token, uint256 userAmount, uint256 creatorAmount, uint256 index);
-    event CreatorVestingCreated(address indexed token, address indexed creator, uint256 amount, uint256 startTime);
+    event Reward(address indexed token, uint256 userAmount, uint256 index);
     event UserVestingCreated(address indexed token, address indexed user, uint256 amount, uint256 startTime);
     event VestedTokensClaimed(address indexed user, address indexed token, uint256 amount);
     
@@ -85,25 +79,6 @@ contract MemedEngageToEarn is Ownable {
         emit UserVestingCreated(_token, _user, _amount, block.timestamp);
     }
     
-    function _createCreatorVesting(address _token, address _creator, uint256 _amount) internal {
-        // Creator vesting: 25% monthly over 4 months
-        uint256 monthlyAmount = _amount / 4;
-        
-        for (uint i = 0; i < 4; i++) {
-            VestingSchedule memory schedule = VestingSchedule({
-                totalAmount: monthlyAmount,
-                startTime: block.timestamp + (i * 30 days), // Monthly releases
-                claimedAmount: 0,
-                active: true
-            });
-            
-            creatorVesting[_token][_creator].push(schedule);
-        }
-        
-        creatorVestingCount[_token][_creator] += 4;
-        emit CreatorVestingCreated(_token, _creator, _amount, block.timestamp);
-    }
-    
     function claimVestedTokens(address _token) external {
         uint256 totalClaimable = 0;
         
@@ -120,19 +95,6 @@ contract MemedEngageToEarn is Ownable {
                     if (userSchedules[i].claimedAmount >= userSchedules[i].totalAmount) {
                         userSchedules[i].active = false;
                     }
-                }
-            }
-        }
-        
-        // Check creator vesting schedules
-        VestingSchedule[] storage creatorSchedules = creatorVesting[_token][msg.sender];
-        for (uint i = 0; i < creatorSchedules.length; i++) {
-            if (creatorSchedules[i].active && block.timestamp >= creatorSchedules[i].startTime) {
-                uint256 claimable = creatorSchedules[i].totalAmount - creatorSchedules[i].claimedAmount;
-                if (claimable > 0) {
-                    totalClaimable += claimable;
-                    creatorSchedules[i].claimedAmount = creatorSchedules[i].totalAmount;
-                    creatorSchedules[i].active = false;
                 }
             }
         }
@@ -165,19 +127,11 @@ contract MemedEngageToEarn is Ownable {
     function getClaimableAmount(address _token, address _user) external view returns (uint256) {
         uint256 totalClaimable = 0;
         
-        // Check user vesting schedules
+        // Check user vesting schedules only
         VestingSchedule[] storage userSchedules = userVesting[_token][_user];
         for (uint i = 0; i < userSchedules.length; i++) {
             if (userSchedules[i].active) {
                 totalClaimable += _calculateClaimableAmount(userSchedules[i], VESTING_DURATION);
-            }
-        }
-        
-        // Check creator vesting schedules
-        VestingSchedule[] storage creatorSchedules = creatorVesting[_token][_user];
-        for (uint i = 0; i < creatorSchedules.length; i++) {
-            if (creatorSchedules[i].active && block.timestamp >= creatorSchedules[i].startTime) {
-                totalClaimable += creatorSchedules[i].totalAmount - creatorSchedules[i].claimedAmount;
             }
         }
         
@@ -187,10 +141,6 @@ contract MemedEngageToEarn is Ownable {
     function getUserVestingSchedules(address _token, address _user) external view returns (VestingSchedule[] memory) {
         return userVesting[_token][_user];
     }
-    
-    function getCreatorVestingSchedules(address _token, address _creator) external view returns (VestingSchedule[] memory) {
-        return creatorVesting[_token][_creator];
-    }
 
     function setMerkleRoot(address token, bytes32 root, uint256 _index) external onlyOwner {
         require(index[token][_index] == true, "Invalid index");
@@ -199,21 +149,19 @@ contract MemedEngageToEarn is Ownable {
         emit SetMerkleRoot(token, _index, root);
     }
 
-    function reward(address token, address _creator) external {
+    function reward(address token) external {
         require(msg.sender == factory, "unauthorized");
-        require(IERC20(token).balanceOf(address(this)) >= (MAX_ENGAGE_USER_REWARD + MAX_ENGAGE_CREATOR_REWARD), "Not enough tokens");
+        require(IERC20(token).balanceOf(address(this)) >= MAX_ENGAGE_USER_REWARD, "Not enough tokens");
         
-        // Create vesting schedule for creator (instead of instant transfer)
-        _createCreatorVesting(token, _creator, MAX_ENGAGE_CREATOR_REWARD);
-        
+        // 100% of rewards go to users - no creator rewards
         unlockedAmount[token] += MAX_ENGAGE_USER_REWARD;
         availableIndex[token]++;
         index[token][availableIndex[token]] = true;
-        emit Reward(token, MAX_ENGAGE_USER_REWARD, MAX_ENGAGE_CREATOR_REWARD, availableIndex[token]);
+        emit Reward(token, MAX_ENGAGE_USER_REWARD, availableIndex[token]);
     }   
 
     function isRewardable(address token) external view returns (bool) {
-        return IERC20(token).balanceOf(address(this)) >= (MAX_ENGAGE_USER_REWARD + MAX_ENGAGE_CREATOR_REWARD);
+        return IERC20(token).balanceOf(address(this)) >= MAX_ENGAGE_USER_REWARD;
     }
 
     function setFactory(address _factory) external onlyOwner {

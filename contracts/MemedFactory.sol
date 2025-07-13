@@ -25,6 +25,13 @@ interface IUniswapV2Router02 {
         address to,
         uint deadline
     ) external payable returns (uint amountToken, uint amountETH, uint liquidity);
+    function swapExactTokensForTokens(
+        uint amountIn,
+        uint amountOutMin,
+        address[] calldata path,
+        address to,
+        uint deadline
+    ) external returns (uint[] memory amounts);
 }
 
 contract MemedFactory is Ownable, ReentrancyGuard {
@@ -33,13 +40,13 @@ contract MemedFactory is Ownable, ReentrancyGuard {
     uint256 constant public MAX_ENGAGE_CREATOR_REWARD_PERCENTAGE = 1;
     
     // Bonding curve parameters
-    uint256 public constant BASE_PRICE = 1e15; // 0.001 ETH
+    uint256 public constant BASE_PRICE = 1e15; // 0.001 native token
     uint256 public constant INITIAL_K = 1e11; // 0.00001
     uint256 public constant K_BOOST_PER_ENGAGEMENT = 1e9; // 0.000001
     uint256 public constant FAIR_LAUNCH_DURATION = 7 days;
-    uint256 public constant MIN_FUNDING_GOAL = 20 ether; // 20 ETH
-    uint256 public constant MAX_WALLET_COMMITMENT = 0.5 ether; // 0.5 ETH
-    uint256 public constant MAX_WALLET_COMMITMENT_NO_SOCIAL = 0.3 ether; // 0.3 ETH without social proof
+    uint256 public constant MIN_FUNDING_GOAL = 20000 * 1e18; // 20,000 native token
+    uint256 public constant MAX_WALLET_COMMITMENT = 500 * 1e18; // 500 native token
+    uint256 public constant MAX_WALLET_COMMITMENT_NO_SOCIAL = 300 * 1e18; // 300 native token without social proof
     
     // Fund distribution
     uint256 public constant PLATFORM_FEE_PERCENTAGE = 5; // 5% to platform
@@ -47,11 +54,6 @@ contract MemedFactory is Ownable, ReentrancyGuard {
     
     // Trading fees
     uint256 public constant SELL_FEE_PERCENTAGE = 15; // 15% fee on sells
-    
-    // Battle requirements
-    uint256 public constant BATTLE_STAKE_REQUIREMENT = 10_000_000 * 1e18; // 10M tokens
-    uint256 public constant BATTLE_BURN_PERCENTAGE = 15; // 15%
-    uint256 public constant BATTLE_PLATFORM_FEE_PERCENTAGE = 5; // 5%
     
     MemedStaking public memedStaking;
     MemedBattle public memedBattle;
@@ -172,18 +174,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         uint256 ethReceived,
         uint256 feeAmount
     );
-
-    event Followed(
-        address indexed follower,
-        address indexed following,
-        uint256 timestamp
-    );
-    event Unfollowed(
-        address indexed follower,
-        address indexed following,
-        uint256 timestamp
-    );
-
+    
     constructor(
         address _memedStaking, 
         address _memedBattle, 
@@ -198,17 +189,18 @@ contract MemedFactory is Ownable, ReentrancyGuard {
     }
 
     function startFairLaunch(
+        address _creator,
         string calldata _lensUsername,
         string calldata _name,
         string calldata _ticker,
         string calldata _description,
         string calldata _image
-    ) external {
-        require(block.timestamp >= blockedCreators[msg.sender], "Creator is blocked for 30 days");
+    ) external onlyOwner {
+        require(block.timestamp >= blockedCreators[_creator], "Creator is blocked for 30 days");
         require(tokenData[_lensUsername].token == address(0), "Already exists");
         
         TokenData storage token = tokenData[_lensUsername];
-        token.creator = msg.sender;
+        token.creator = _creator;
         token.name = _name;
         token.ticker = _ticker;
         token.description = _description;
@@ -221,7 +213,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         
         tokens.push(_lensUsername);
         
-        emit FairLaunchStarted(_lensUsername, msg.sender, block.timestamp, block.timestamp + FAIR_LAUNCH_DURATION);
+        emit FairLaunchStarted(_lensUsername, _creator, block.timestamp, block.timestamp + FAIR_LAUNCH_DURATION);
     }
     
     function commitToFairLaunch(
@@ -291,8 +283,8 @@ contract MemedFactory is Ownable, ReentrancyGuard {
             
             // Create Uniswap pair and add liquidity
             _createUniswapLP(_lensUsername, address(memedToken), lpAmount);
-            
-            memedEngageToEarn.reward(address(memedToken), token.creator);
+
+            memedStaking.setTokenQuarterConfig(address(memedToken));
             
             emit TokenCreated(
                 address(memedToken),
@@ -343,7 +335,23 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         
         emit LiquidityAdded(_token, pair, amountToken, amountETH, liquidity);
     }
-    
+
+    function swap(
+        address _token,
+        uint256 _amount,
+        address[] calldata _path
+    ) external nonReentrant returns (uint256[] memory) {
+        IERC20(_token).approve(address(uniswapV2Router), _amount);
+        uint256[] memory amounts = uniswapV2Router.swapExactTokensForTokens(
+            _amount,
+            0,
+            _path,
+            address(this),
+            block.timestamp + 300
+        );
+        return amounts;
+    }
+
     function sellTokens(address _token, uint256 _amount) external nonReentrant {
         require(_amount > 0, "Amount must be positive");
         require(IERC20(_token).balanceOf(msg.sender) >= _amount, "Insufficient token balance");
@@ -396,8 +404,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
     }
     
     function _distributeFairLaunchTokens(string memory _lensUsername, address _token) internal {
-        TokenData storage token = tokenData[_lensUsername];
-        
+         
         // Calculate total tokens to distribute (200M allocation)
         uint256 totalAllocation = MemedToken(_token).UNISWAP_LP_ALLOCATION();
         
@@ -453,7 +460,6 @@ contract MemedFactory is Ownable, ReentrancyGuard {
             bool minusHeat = _heatUpdates[i].minusHeat;
             
             string memory lensUsername = getByToken(tokenAddress);
-            address creator = tokenData[lensUsername].creator;
             require(tokenData[lensUsername].token != address(0), "not minted");
             
             if(minusHeat) {
@@ -462,27 +468,10 @@ contract MemedFactory is Ownable, ReentrancyGuard {
                 tokenData[lensUsername].heat += heat;
             }
             
-            MemedBattle.Battle[] memory battles = memedBattle.getUserBattles(tokenAddress);
-            for(uint j = 0; j < battles.length; j++) {
-                if(battles[j].memeA == address(0) || battles[j].memeB == address(0)) {
-                    continue;
-                }
-                address opponent = battles[j].memeA == tokenAddress ? battles[j].memeB : battles[j].memeA;
-                if(block.timestamp > battles[j].endTime && !battles[j].resolved) {
-                    address winner = tokenData[getByToken(opponent)].heat > tokenData[lensUsername].heat ? opponent : tokenAddress;
-                    memedBattle.resolveBattle(battles[j].battleId, winner);
-                    if(memedStaking.isRewardable(tokenAddress)) {
-                        memedStaking.reward(tokenAddress, creator);
-                    }
-                }
-            }
-            
             if ((tokenData[lensUsername].heat - tokenData[lensUsername].lastRewardAt) >= REWARD_PER_ENGAGEMENT && memedEngageToEarn.isRewardable(tokenAddress)) {
-                memedEngageToEarn.reward(tokenAddress, creator);
+                
+                memedEngageToEarn.reward(tokenAddress);
                 tokenData[lensUsername].lastRewardAt = tokenData[lensUsername].heat;
-                if(memedStaking.isRewardable(tokenAddress)) {
-                    memedStaking.reward(tokenAddress, creator);
-                }
             }
         }
     }
@@ -597,6 +586,15 @@ contract MemedFactory is Ownable, ReentrancyGuard {
     
     function getUserTokenAllowance(address _token, address _user) external view returns (uint256) {
         return IERC20(_token).allowance(_user, address(this));
+    }
+    
+    function getTokenCount() external view returns (uint256) {
+        return tokens.length;
+    }
+    
+    function getTokenAtIndex(uint256 index) external view returns (string memory) {
+        require(index < tokens.length, "Index out of bounds");
+        return tokens[index];
     }
     
     function refundFailedLaunch(string calldata _lensUsername) external nonReentrant {

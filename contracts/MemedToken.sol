@@ -17,8 +17,14 @@ contract MemedToken is ERC20, Ownable {
     address public stakingContract;
     address public engageToEarnContract;
     address public factoryContract;
-    address public creator;
     
+    struct CreatorData {
+        address creator;
+        uint256 balance;
+        uint256 lastRewardAt;
+    }
+
+    CreatorData public creatorData;
     bool public fairLaunchCompleted;
     uint256 public fairLaunchTokensMinted;
     
@@ -29,7 +35,9 @@ contract MemedToken is ERC20, Ownable {
         address _staking,
         address _engageToEarn
     ) ERC20(_name, _ticker) Ownable() {
-        creator = _creator;
+        creatorData.creator = _creator;
+        creatorData.balance = CREATOR_INCENTIVES_ALLOCATION * 70 / 100;
+        creatorData.lastRewardAt = block.timestamp;
         stakingContract = _staking;
         engageToEarnContract = _engageToEarn;
         factoryContract = msg.sender;
@@ -37,11 +45,21 @@ contract MemedToken is ERC20, Ownable {
         // Initial distribution
         _mint(_staking, STAKING_REWARDS_ALLOCATION);
         _mint(_engageToEarn, ENGAGEMENT_REWARDS_ALLOCATION);
-        
-        // Creator gets initial allocation for staking in battles (10M minimum)
-        _mint(_creator, 12_000_000 * 1e18);
+        _mint(_creator, CREATOR_INCENTIVES_ALLOCATION * 30 / 100);
     }
-    
+
+    function claim() external {
+        require(msg.sender == creatorData.creator, "Only creator can claim");
+        require(block.timestamp >= creatorData.lastRewardAt + 30 days, "Not enough time has passed");
+        
+        uint256 amount = CREATOR_INCENTIVES_ALLOCATION * 35 / 100;
+        require(creatorData.balance >= amount, "Not enough balance to claim"); // 35% of creator incentives
+        creatorData.balance -= amount;
+        creatorData.lastRewardAt = block.timestamp;
+
+        _mint(creatorData.creator, amount);
+    }
+
     function mintFairLaunchTokens(address to, uint256 amount) external {
         require(msg.sender == factoryContract, "Only factory can mint");
         require(!fairLaunchCompleted, "Fair launch completed");
