@@ -40,6 +40,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
     uint256 constant public MAX_ENGAGE_CREATOR_REWARD_PERCENTAGE = 1;
     
     // Bonding curve parameters
+    uint256 public constant INITIAL_SUPPLY = 200000000 * 1e18; // 200M token
     uint256 public constant BASE_PRICE = 1e15; // 0.001 native token
     uint256 public constant INITIAL_K = 1e11; // 0.00001
     uint256 public constant K_BOOST_PER_ENGAGEMENT = 1e9; // 0.000001
@@ -69,42 +70,40 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         string description;
         string image;
         string lensUsername;
-        uint256 heat;
-        uint256 lastRewardAt;
         uint256 createdAt;
-        // Fair launch data
-        bool fairLaunchActive;
-        uint256 fairLaunchStartTime;
-        uint256 totalCommitted;
-        uint256 kValue;
-        uint256 lastEngagementBoost;
-        address uniswapPair;
-        mapping(address => uint256) commitments;
-        mapping(address => bool) hasLensVerification;
     }
-    
-    // Return struct without mappings for external functions
-    struct TokenDataView {
-        address token;
-        address creator;
-        string name;
-        string ticker;
-        string description;
-        string image;
-        string lensUsername;
+
+    enum FairLaunchStatus {
+        ACTIVE,
+        COMPLETED,
+        FAILED
+    }
+
+    struct Commitment {
+        uint256 amount;
+        uint256 tokenAmount;
+        bool claimed;
+        bool refunded;
+        bool hasLensVerification;
+    }
+
+    struct FairLaunchData {
+        FairLaunchStatus status;
+        uint256 fairLaunchStartTime;
+        uint256 totalCommitted;
+        uint256 totalSold;
+        uint256 kValue;
+        address uniswapPair;
+        mapping(address => Commitment) commitments;
+        mapping(address => uint256) balance;
+        uint256 lastEngagementBoost;
         uint256 heat;
         uint256 lastRewardAt;
         uint256 createdAt;
-        bool fairLaunchActive;
-        uint256 fairLaunchStartTime;
-        uint256 totalCommitted;
-        uint256 kValue;
-        uint256 lastEngagementBoost;
-        address uniswapPair;
     }
 
     struct HeatUpdate {
-        address token;
+        uint256 id;
         uint256 heat;
         bool minusHeat;
     }
@@ -115,11 +114,16 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         uint256 mirrors;
         uint256 quotes;
     }
+    
+    uint256 public id;
+    address[] public tokens;
 
-    mapping(string => TokenData) public tokenData;
-    string[] public tokens;
-    mapping(address => uint256) public blockedCreators; // timestamp when block expires
-
+    mapping(uint256 => FairLaunchData) public fairLaunchData;
+    mapping(uint256 => TokenData) public tokenData;
+    mapping(address => uint256[]) public tokenIdsByCreator;
+    mapping(address => uint256) public tokenIdByAddress;
+    mapping(address => uint256) public blockedCreators;
+    
     // Events
     event TokenCreated(
         address indexed token,
@@ -133,6 +137,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
     );
     
     event FairLaunchStarted(
+        uint256 indexed id,
         string indexed lensUsername,
         address indexed creator,
         uint256 startTime,
@@ -140,21 +145,21 @@ contract MemedFactory is Ownable, ReentrancyGuard {
     );
     
     event CommitmentMade(
-        string indexed lensUsername,
+        uint256 indexed id,
         address indexed user,
         uint256 amount,
         bool hasLensVerification
     );
     
     event FairLaunchCompleted(
-        string indexed lensUsername,
+        uint256 indexed id,
         address indexed token,
         uint256 totalRaised,
         bool successful
     );
     
     event LiquidityAdded(
-        address indexed token,
+        uint256 indexed id,
         address indexed pair,
         uint256 tokenAmount,
         uint256 ethAmount,
@@ -168,7 +173,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
     );
     
     event TokenSold(
-        address indexed token,
+        uint256 indexed id,
         address indexed seller,
         uint256 tokenAmount,
         uint256 ethReceived,
@@ -197,65 +202,62 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         string calldata _image
     ) external onlyOwner {
         require(block.timestamp >= blockedCreators[_creator], "Creator is blocked for 30 days");
-        require(tokenData[_lensUsername].token == address(0), "Already exists");
+        require(!_tokenExists(), "Already exists");
         
-        TokenData storage token = tokenData[_lensUsername];
+        id++;
+        TokenData storage token = tokenData[id];
         token.creator = _creator;
         token.name = _name;
         token.ticker = _ticker;
         token.description = _description;
         token.image = _image;
         token.lensUsername = _lensUsername;
-        token.fairLaunchActive = true;
-        token.fairLaunchStartTime = block.timestamp;
-        token.kValue = INITIAL_K;
-        token.createdAt = block.timestamp;
-        
-        tokens.push(_lensUsername);
-        
-        emit FairLaunchStarted(_lensUsername, _creator, block.timestamp, block.timestamp + FAIR_LAUNCH_DURATION);
+
+        FairLaunchData storage fairLaunch = fairLaunchData[id];
+        fairLaunch.status = FairLaunchStatus.ACTIVE;
+        fairLaunch.fairLaunchStartTime = block.timestamp;
+        fairLaunch.kValue = INITIAL_K;
+        fairLaunch.createdAt = block.timestamp;
+
+        tokenIdsByCreator[_creator].push(id);
+        emit FairLaunchStarted(id, _lensUsername, _creator, block.timestamp, block.timestamp + FAIR_LAUNCH_DURATION);
     }
     
     function commitToFairLaunch(
-        string calldata _lensUsername,
+        uint256 _id,
         bool _hasLensVerification
     ) external payable nonReentrant {
-        TokenData storage token = tokenData[_lensUsername];
-        require(token.fairLaunchActive, "Fair launch not active");
-        require(block.timestamp <= token.fairLaunchStartTime + FAIR_LAUNCH_DURATION, "Fair launch ended");
+        FairLaunchData storage fairLaunch = fairLaunchData[_id];
+        require(fairLaunch.status == FairLaunchStatus.ACTIVE, "Fair launch not active");
+        require(block.timestamp <= fairLaunch.fairLaunchStartTime + FAIR_LAUNCH_DURATION, "Fair launch ended");
         require(msg.value > 0, "Must send ETH");
         
         uint256 maxCommitment = _hasLensVerification ? MAX_WALLET_COMMITMENT : MAX_WALLET_COMMITMENT_NO_SOCIAL;
-        require(token.commitments[msg.sender] + msg.value <= maxCommitment, "Exceeds wallet limit");
+        require(fairLaunch.commitments[msg.sender].amount + msg.value <= maxCommitment, "Exceeds wallet limit");
+        uint256 tokenAmount = getNativeToTokenAmount(_id, msg.value);
+        require(tokenAmount > 0, "Insufficient ETH");
+        require(fairLaunch.totalSold + tokenAmount <= INITIAL_SUPPLY, "Exceeds initial supply");
+        Commitment storage commitment = fairLaunch.commitments[msg.sender];
+        commitment.amount += msg.value;
+        commitment.tokenAmount += tokenAmount;
+        commitment.hasLensVerification = _hasLensVerification;
         
-        token.commitments[msg.sender] += msg.value;
-        token.totalCommitted += msg.value;
-        token.hasLensVerification[msg.sender] = _hasLensVerification;
+        fairLaunch.totalSold += tokenAmount;
+        fairLaunch.totalCommitted += msg.value;
+        fairLaunch.balance[msg.sender] += tokenAmount;
         
-        emit CommitmentMade(_lensUsername, msg.sender, msg.value, _hasLensVerification);
-        
+        emit CommitmentMade(_id, msg.sender, msg.value, _hasLensVerification);
+     
         // Check if we can launch early
-        if (token.totalCommitted >= MIN_FUNDING_GOAL) {
-            _completeFairLaunch(_lensUsername);
+        if (fairLaunch.totalCommitted >= MIN_FUNDING_GOAL) {
+            _completeFairLaunch(_id);
         }
     }
     
-    function completeFairLaunch(string calldata _lensUsername) external {
-        TokenData storage token = tokenData[_lensUsername];
-        require(token.fairLaunchActive, "Fair launch not active");
-        require(
-            block.timestamp > token.fairLaunchStartTime + FAIR_LAUNCH_DURATION ||
-            msg.sender == owner(),
-            "Fair launch not ended"
-        );
-        
-        _completeFairLaunch(_lensUsername);
-    }
-    
-    function _completeFairLaunch(string memory _lensUsername) internal {
-        TokenData storage token = tokenData[_lensUsername];
-        
-        if (token.totalCommitted >= MIN_FUNDING_GOAL) {
+    function _completeFairLaunch(uint256 _id) internal {
+        FairLaunchData storage fairLaunch = fairLaunchData[_id];
+        TokenData storage token = tokenData[_id];
+        if (fairLaunch.totalCommitted >= MIN_FUNDING_GOAL) {
             // Create the meme token
             MemedToken memedToken = new MemedToken(
                 token.name,
@@ -266,25 +268,22 @@ contract MemedFactory is Ownable, ReentrancyGuard {
             );
             
             token.token = address(memedToken);
-            token.fairLaunchActive = false;
-            
-            // Distribute tokens based on bonding curve
-            _distributeFairLaunchTokens(_lensUsername, address(memedToken));
-            
-            // Complete fair launch and enable LP minting
-            memedToken.completeFairLaunch();
+            fairLaunch.status = FairLaunchStatus.COMPLETED;
+            tokens.push(address(memedToken));
             
             // Calculate fund distribution: 5% platform, 95% LP
-            uint256 platformFee = (token.totalCommitted * PLATFORM_FEE_PERCENTAGE) / 100;
-            uint256 lpAmount = token.totalCommitted - platformFee;
+            uint256 platformFee = (fairLaunch.totalCommitted * PLATFORM_FEE_PERCENTAGE) / 100;
+            uint256 lpAmount = fairLaunch.totalCommitted - platformFee;
             
             // Send platform fee to owner
-            payable(owner()).transfer(platformFee);
+            (bool success, ) = payable(owner()).call{value: platformFee}("");
+            require(success, "Transfer failed");
             
             // Create Uniswap pair and add liquidity
-            _createUniswapLP(_lensUsername, address(memedToken), lpAmount);
+            _createUniswapLP(_id, address(memedToken), lpAmount);
 
             memedStaking.setTokenQuarterConfig(address(memedToken));
+            tokenIdByAddress[address(memedToken)] = _id;
             
             emit TokenCreated(
                 address(memedToken),
@@ -297,20 +296,21 @@ contract MemedFactory is Ownable, ReentrancyGuard {
                 block.timestamp
             );
             
-            emit FairLaunchCompleted(_lensUsername, address(memedToken), token.totalCommitted, true);
+            emit FairLaunchCompleted(_id, address(memedToken), fairLaunch.totalCommitted, true);
         } else {
             // Failed to reach goal - refund users
-            token.fairLaunchActive = false;
+            fairLaunch.status = FairLaunchStatus.FAILED;
             uint256 blockExpiry = block.timestamp + 30 days;
             blockedCreators[token.creator] = blockExpiry; // 30-day block
             
             emit CreatorBlocked(token.creator, blockExpiry, "Failed fair launch");
-            emit FairLaunchCompleted(_lensUsername, address(0), token.totalCommitted, false);
+            
+            emit FairLaunchCompleted(_id, address(0), fairLaunch.totalCommitted, false);
         }
     }
     
-    function _createUniswapLP(string memory _lensUsername, address _token, uint256 _ethAmount) internal {
-        TokenData storage token = tokenData[_lensUsername];
+    function _createUniswapLP(uint256 _id, address _token, uint256 _ethAmount) internal {
+        FairLaunchData storage fairLaunch = fairLaunchData[_id];
         
         // Mint LP allocation tokens (300M)
         uint256 lpTokenAmount = MemedToken(_token).UNISWAP_LP_ALLOCATION();
@@ -318,7 +318,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         
         // Create Uniswap pair
         address pair = uniswapV2Factory.createPair(_token, uniswapV2Router.WETH());
-        token.uniswapPair = pair;
+        fairLaunch.uniswapPair = pair;
         
         // Approve router to spend tokens
         IERC20(_token).approve(address(uniswapV2Router), lpTokenAmount);
@@ -333,7 +333,8 @@ contract MemedFactory is Ownable, ReentrancyGuard {
             block.timestamp + 300 // 5 minute deadline
         );
         
-        emit LiquidityAdded(_token, pair, amountToken, amountETH, liquidity);
+        
+        emit LiquidityAdded(_id, pair, amountToken, amountETH, liquidity);
     }
 
     function swap(
@@ -352,74 +353,71 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         return amounts;
     }
 
-    function sellTokens(address _token, uint256 _amount) external nonReentrant {
+    function sellTokens(uint256 _id, uint256 _amount) external nonReentrant {
         require(_amount > 0, "Amount must be positive");
-        require(IERC20(_token).balanceOf(msg.sender) >= _amount, "Insufficient token balance");
+        require(fairLaunchData[_id].balance[msg.sender] >= _amount, "Insufficient token balance");
         
-        string memory lensUsername = getByToken(_token);
-        TokenData storage token = tokenData[lensUsername];
-        require(token.token != address(0), "Token not found");
-        require(!token.fairLaunchActive, "Fair launch still active");
-        
-        // Calculate sell price using bonding curve
-        uint256 currentSupply = IERC20(_token).totalSupply();
-        uint256 sellPrice = calculateBondingCurvePrice(currentSupply, token.kValue);
-        uint256 ethValue = (_amount * sellPrice) / 1e18;
-        
-        // Apply 15% sell fee
+        FairLaunchData storage fairLaunch = fairLaunchData[_id];
+        uint256 ethValue = getTokenToNativeToken(_id, _amount);
         uint256 feeAmount = (ethValue * SELL_FEE_PERCENTAGE) / 100;
         uint256 ethToUser = ethValue - feeAmount;
         
         require(address(this).balance >= ethValue, "Insufficient ETH in contract");
         
-        // Transfer tokens from user to contract (effectively burning them from circulation)
-        IERC20(_token).transferFrom(msg.sender, address(this), _amount);
+        fairLaunch.balance[msg.sender] -= _amount;
+        fairLaunch.totalSold -= _amount;
+        fairLaunch.totalCommitted -= ethValue;
+
+        (bool success, ) = payable(msg.sender).call{value: ethToUser}("");
+        require(success, "Transfer failed");
         
-        // Send ETH to user (minus fee)
-        payable(msg.sender).transfer(ethToUser);
-        
-        // Send fee to platform owner
         if (feeAmount > 0) {
-            payable(owner()).transfer(feeAmount);
+            (bool success_fee, ) = payable(owner()).call{value: feeAmount}("");
+            require(success_fee, "Transfer failed");
         }
         
-        emit TokenSold(_token, msg.sender, _amount, ethToUser, feeAmount);
+        emit TokenSold(_id, msg.sender, _amount, ethToUser, feeAmount);
     }
+
     
-    function getSellQuote(address _token, uint256 _amount) external view returns (uint256 ethValue, uint256 feeAmount, uint256 ethToUser) {
-        string memory lensUsername = getByToken(_token);
-        TokenData storage token = tokenData[lensUsername];
-        require(token.token != address(0), "Token not found");
-        
+    function getTokenToNativeToken(uint256 _id, uint256 _amount) public view returns (uint256 ethValue) {
+        FairLaunchData storage fairLaunch = fairLaunchData[_id];
         // Calculate sell price using bonding curve
-        uint256 currentSupply = IERC20(_token).totalSupply();
-        uint256 sellPrice = calculateBondingCurvePrice(currentSupply, token.kValue);
-        ethValue = (_amount * sellPrice) / 1e18;
-        
-        // Apply 15% sell fee
-        feeAmount = (ethValue * SELL_FEE_PERCENTAGE) / 100;
-        ethToUser = ethValue - feeAmount;
-        
-        return (ethValue, feeAmount, ethToUser);
+        uint256 price = calculateBondingCurvePrice(fairLaunch.totalSold, fairLaunch.kValue);
+        ethValue = (_amount * price) / 1e18;
+        return ethValue;
     }
     
-    function _distributeFairLaunchTokens(string memory _lensUsername, address _token) internal {
-         
-        // Calculate total tokens to distribute (200M allocation)
-        uint256 totalAllocation = MemedToken(_token).UNISWAP_LP_ALLOCATION();
-        
-        // Simple pro-rata distribution for now
-        // In production, this would use the bonding curve calculation
-        for (uint i = 0; i < tokens.length; i++) {
-            if (keccak256(bytes(tokens[i])) == keccak256(bytes(_lensUsername))) {
-                // This is a simplified version - would need to iterate through all commitments
-                // For now, we'll mint the allocation to this contract for later distribution
-                MemedToken(_token).mintFairLaunchTokens(address(this), totalAllocation);
-                break;
-            }
-        }
+    function getNativeToTokenAmount(uint256 _id, uint256 _ethAmount) public view returns (uint256 tokenAmount) {
+        FairLaunchData storage fairLaunch = fairLaunchData[_id];
+        // Calculate buy price using bonding curve
+        uint256 price = calculateBondingCurvePrice(fairLaunch.totalSold, fairLaunch.kValue);
+        require(price > 0, "Price cannot be zero");
+        tokenAmount = (_ethAmount * 1e18) / price;
+        return tokenAmount;
     }
     
+    function claim(uint256 _id) external nonReentrant {
+        FairLaunchData storage fairLaunch = fairLaunchData[_id];
+        require(fairLaunch.status == FairLaunchStatus.COMPLETED, "Fair launch not completed");
+        Commitment storage commitment = fairLaunch.commitments[msg.sender];
+        require(commitment.amount > 0, "No commitment");
+        require(!commitment.claimed, "Already claimed");
+        MemedToken(tokenData[_id].token).claim(msg.sender, commitment.tokenAmount);
+        commitment.claimed = true;
+    }
+    
+    function refund(uint256 _id) external nonReentrant {
+        FairLaunchData storage fairLaunch = fairLaunchData[_id];
+        require(fairLaunch.status == FairLaunchStatus.FAILED, "Fair launch not failed");
+        Commitment storage commitment = fairLaunch.commitments[msg.sender];
+        require(commitment.amount > 0, "No commitment");
+        require(!commitment.refunded, "Already refunded");
+        (bool success, ) = payable(msg.sender).call{value: commitment.amount}("");
+        require(success, "Transfer failed");
+        commitment.refunded = true;
+    }
+
     function calculateBondingCurvePrice(uint256 _supply, uint256 _kValue) public pure returns (uint256) {
         // Price = Base Price × (1 + k × Supply)²
         uint256 factor = 1e18 + (_kValue * _supply) / 1e18;
@@ -428,25 +426,25 @@ contract MemedFactory is Ownable, ReentrancyGuard {
     }
     
     function updateEngagement(
-        string calldata _lensUsername,
+        uint256 _id,
         EngagementData calldata _engagement
     ) external onlyOwner {
-        TokenData storage token = tokenData[_lensUsername];
-        require(token.token != address(0), "Token not created");
+        FairLaunchData storage fairLaunch = fairLaunchData[_id];
+        require(fairLaunch.status == FairLaunchStatus.COMPLETED, "Fair launch not completed");
         
         // Calculate heat using proper formula: (Likes × 1) + (Mirrors × 3) + (Quotes × 5)
         uint256 heatIncrease = _engagement.likes + (_engagement.mirrors * 3) + (_engagement.quotes * 5);
         
         // Update k-value for bonding curve (boost for 24h)
-        if (block.timestamp < token.lastEngagementBoost + 1 days) {
-            token.kValue += K_BOOST_PER_ENGAGEMENT;
+        if (block.timestamp < fairLaunch.lastEngagementBoost + 1 days) {
+            fairLaunch.kValue += K_BOOST_PER_ENGAGEMENT;
         }
-        token.lastEngagementBoost = block.timestamp;
+        fairLaunch.lastEngagementBoost = block.timestamp;
         
         // Create memory array for heat update
         HeatUpdate[] memory heatUpdate = new HeatUpdate[](1);
         heatUpdate[0] = HeatUpdate({
-            token: token.token,
+            id: _id,
             heat: heatIncrease,
             minusHeat: false
         });
@@ -455,23 +453,17 @@ contract MemedFactory is Ownable, ReentrancyGuard {
     
     function _updateHeatInternal(HeatUpdate[] memory _heatUpdates) internal {
         for(uint i = 0; i < _heatUpdates.length; i++) {
-            address tokenAddress = _heatUpdates[i].token;
-            uint256 heat = _heatUpdates[i].heat;
-            bool minusHeat = _heatUpdates[i].minusHeat;
-            
-            string memory lensUsername = getByToken(tokenAddress);
-            require(tokenData[lensUsername].token != address(0), "not minted");
-            
-            if(minusHeat) {
-                tokenData[lensUsername].heat -= heat;
+            TokenData storage token = tokenData[_heatUpdates[i].id];
+            FairLaunchData storage fairLaunch = fairLaunchData[_heatUpdates[i].id];
+            if(_heatUpdates[i].minusHeat) {
+                fairLaunch.heat -= _heatUpdates[i].heat;
             } else {
-                tokenData[lensUsername].heat += heat;
+                fairLaunch.heat += _heatUpdates[i].heat;
             }
             
-            if ((tokenData[lensUsername].heat - tokenData[lensUsername].lastRewardAt) >= REWARD_PER_ENGAGEMENT && memedEngageToEarn.isRewardable(tokenAddress)) {
-                
-                memedEngageToEarn.reward(tokenAddress);
-                tokenData[lensUsername].lastRewardAt = tokenData[lensUsername].heat;
+            if (fairLaunch.status == FairLaunchStatus.COMPLETED && (fairLaunch.heat - fairLaunch.lastRewardAt) >= REWARD_PER_ENGAGEMENT && memedEngageToEarn.isRewardable(token.token)) {
+                memedEngageToEarn.reward(token.token);
+                fairLaunch.lastRewardAt = fairLaunch.heat;
             }
         }
     }
@@ -495,79 +487,44 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         _updateHeatInternal(heatUpdatesMemory);
     }
 
-    function getByToken(address _token) internal view returns (string memory) {
-        string memory lensUsername;
-        for (uint i = 0; i < tokens.length; i++) {
-            if (tokenData[tokens[i]].token == _token) {
-                lensUsername = tokens[i];
-                break;
-            }
-        }
-        return lensUsername;
+    function getByToken(address _token) public view returns (TokenData memory) {
+        return tokenData[tokenIdByAddress[_token]];
     }
 
-    function getByAddress(address _token, address _creator) public view returns (address[2] memory) {
-        address token;
-        address creator;
-        if(_token == address(0)) {
-            for (uint i = 0; i < tokens.length; i++) {
-                if (tokenData[tokens[i]].creator == _creator) {
-                    token = tokenData[tokens[i]].token;
-                    creator = _creator;
-                }
-            }
-        } else {
-            for (uint i = 0; i < tokens.length; i++) {
-                if (tokenData[tokens[i]].token == _token) {
-                    token = _token;
-                    creator = tokenData[tokens[i]].creator;
-                }
-            }
-        }
-        return [token, creator];
+    function getHeat(address _token) external view returns (uint256) {
+        return fairLaunchData[tokenIdByAddress[_token]].heat;
     }
 
-    function getTokens(address _token) external view returns (TokenDataView[] memory) {
-        uint length = address(0) == _token ? tokens.length : 1;
-        TokenDataView[] memory result = new TokenDataView[](length);
-        if(address(0) == _token) {
-            for (uint i = 0; i < length; i++) {
-                result[i] = _getTokenDataView(tokens[i]);
-            }
-        } else {
-            result[0] = _getTokenDataView(getByToken(_token));
+    function getTokens() external view returns (TokenData[] memory) {
+        TokenData[] memory result = new TokenData[](tokens.length);
+        for(uint i = 0; i < tokens.length; i++) {
+            result[i] = tokenData[tokenIdByAddress[tokens[i]]];
         }
         return result;
     }
-    
-    function _getTokenDataView(string memory _lensUsername) internal view returns (TokenDataView memory) {
-        TokenData storage original = tokenData[_lensUsername];
-        return TokenDataView({
-            token: original.token,
-            creator: original.creator,
-            name: original.name,
-            ticker: original.ticker,
-            description: original.description,
-            image: original.image,
-            lensUsername: original.lensUsername,
-            heat: original.heat,
-            lastRewardAt: original.lastRewardAt,
-            createdAt: original.createdAt,
-            fairLaunchActive: original.fairLaunchActive,
-            fairLaunchStartTime: original.fairLaunchStartTime,
-            totalCommitted: original.totalCommitted,
-            kValue: original.kValue,
-            lastEngagementBoost: original.lastEngagementBoost,
-            uniswapPair: original.uniswapPair
-        });
+
+    function getFairLaunchActive(address _token) public view returns (bool) {
+        uint256 tokenId = tokenIdByAddress[_token];
+        if(tokenId == 0) {
+            return false;
+        }
+        FairLaunchData storage fairLaunch = fairLaunchData[tokenId];
+        return fairLaunch.status == FairLaunchStatus.ACTIVE;
     }
-    
-    function getUserCommitment(string calldata _lensUsername, address _user) external view returns (uint256) {
-        return tokenData[_lensUsername].commitments[_user];
+
+    function _tokenExists() internal view returns (bool) {
+        uint256[] memory tokenIds = tokenIdsByCreator[msg.sender];
+        for(uint i = 0; i < tokenIds.length; i++) {
+            if(fairLaunchData[tokenIds[i]].status == FairLaunchStatus.COMPLETED) {
+                return true;
+            }
+        }
+        return false;
     }
+
     
-    function getUniswapPair(string calldata _lensUsername) external view returns (address) {
-        return tokenData[_lensUsername].uniswapPair;
+    function getUserCommitment(uint256 _id, address _user) external view returns (Commitment memory) {
+        return fairLaunchData[_id].commitments[_user];
     }
     
     function isCreatorBlocked(address _creator) external view returns (bool blocked, uint256 blockExpiresAt) {
@@ -576,42 +533,10 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         return (blocked, blockExpiresAt);
     }
     
-    function getContractETHBalance() external view returns (uint256) {
-        return address(this).balance;
-    }
-    
     function withdrawETH(uint256 _amount) external onlyOwner {
-        payable(owner()).transfer(_amount);
+        (bool success, ) = payable(owner()).call{value: _amount}("");
+        require(success, "Transfer failed");
     }
-    
-    function getUserTokenAllowance(address _token, address _user) external view returns (uint256) {
-        return IERC20(_token).allowance(_user, address(this));
-    }
-    
-    function getTokenCount() external view returns (uint256) {
-        return tokens.length;
-    }
-    
-    function getTokenAtIndex(uint256 index) external view returns (string memory) {
-        require(index < tokens.length, "Index out of bounds");
-        return tokens[index];
-    }
-    
-    function refundFailedLaunch(string calldata _lensUsername) external nonReentrant {
-        TokenData storage token = tokenData[_lensUsername];
-        require(!token.fairLaunchActive, "Fair launch still active");
-        require(token.token == address(0), "Fair launch succeeded");
-        
-        uint256 commitment = token.commitments[msg.sender];
-        require(commitment > 0, "No commitment to refund");
-        
-        token.commitments[msg.sender] = 0;
-        
-        // Refund 90% (10% penalty for failed launch)
-        uint256 refundAmount = (commitment * 90) / 100;
-        payable(msg.sender).transfer(refundAmount);
-    }
-    
     // Receive ETH
     receive() external payable {}
 }

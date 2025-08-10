@@ -60,32 +60,28 @@ contract MemedBattle is Ownable, ReentrancyGuard {
     event PlatformFeeTransferred(uint256 battleId, address token, uint256 amount);
 
     function startBattle(address _memeB) external nonReentrant returns (uint256) {
-        address[2] memory addressesA = factory.getByAddress(address(0), msg.sender);
-        address memeA = addressesA[0];
-        address creatorA = addressesA[1];
-        require(memeA != address(0), "MemeA is not minted");
-        require(creatorA == msg.sender, "You are not the creator");
+        MemedFactory.TokenData memory tokenA = factory.getByToken(msg.sender);
+        require(tokenA.token != address(0), "MemeA is not minted");
+        require(tokenA.creator == msg.sender, "You are not the creator");
+        require(tokenA.token != _memeB, "Cannot battle yourself");
         
-        address[2] memory addressesB = factory.getByAddress(_memeB, address(0));
-        address memeB = addressesB[0];
-        address creatorB = addressesB[1];
-        require(memeB != address(0), "MemeB is not minted");
-        require(memeB != memeA, "Cannot battle yourself");
-        allocateTokensToBattle(battleCount, memeA, CREATOR_STAKE_REQUIREMENT);
-        allocateTokensToBattle(battleCount, memeB, CREATOR_STAKE_REQUIREMENT);
+        MemedFactory.TokenData memory tokenB = factory.getByToken(_memeB);
+        require(tokenB.token != address(0), "MemeB is not minted");
+        allocateTokensToBattle(battleCount, tokenA.token, CREATOR_STAKE_REQUIREMENT);
+        allocateTokensToBattle(battleCount, tokenB.token, CREATOR_STAKE_REQUIREMENT);
         Battle storage b = battles[battleCount];
         b.battleId = battleCount;
-        b.memeA = memeA;
-        b.memeB = memeB;
-        b.creatorA = msg.sender;
-        b.creatorB = creatorB;
+        b.memeA = tokenA.token;
+        b.memeB = tokenB.token;
+        b.creatorA = tokenA.creator;
+        b.creatorB = tokenB.creator;
         b.startTime = block.timestamp;
         b.endTime = block.timestamp + battleDuration;
         b.resolved = false;
-        battleIds[memeA].push(battleCount);
-        battleIds[memeB].push(battleCount);
+        battleIds[tokenA.token].push(battleCount);
+        battleIds[tokenB.token].push(battleCount);
 
-        emit BattleStarted(battleCount, memeA, memeB, msg.sender, creatorB);
+        emit BattleStarted(battleCount, tokenA.token, tokenB.token, msg.sender, tokenB.creator);
         return battleCount++;
     }
     
@@ -98,11 +94,11 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         require(_amount > 0, "Amount must be positive");
         
         // Get user's token address first
-        address userToken = _getUserToken(msg.sender);
-        require(userToken != address(0), "User has no meme token");
+        MemedFactory.TokenData memory userToken = factory.getByToken(msg.sender);
+        require(userToken.token != address(0), "User has no meme token");
         
         // Check user's available staked balance for allocation
-        uint256 availableForAllocation = stakingContract.getAvailableToken(userToken, msg.sender);
+        uint256 availableForAllocation = stakingContract.getAvailableToken(userToken.token, msg.sender);
         require(availableForAllocation >= _amount, "Insufficient staked tokens available");
         
         if (userAllocationIndex[_battleId][msg.sender] == 0) {
@@ -130,12 +126,6 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         
         emit UserAllocated(_battleId, msg.sender, _supportedMeme, _amount);
     }
-    
-    function _getUserToken(address _user) internal view returns (address) {
-        // Get user's meme token from factory
-        address[2] memory addresses = factory.getByAddress(address(0), _user);
-        return addresses[0]; // Returns address(0) if user has no meme token
-    }
 
     function _burnTokens(address _token, uint256 _amount) internal {
         // Simple burn by sending to zero address
@@ -152,11 +142,8 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         require(msg.sender == address(factory) || msg.sender == owner(), "Unauthorized");
         
         // Get engagement scores (heat) from factory
-        MemedFactory.TokenDataView[] memory tokenDataA = factory.getTokens(battle.memeA);
-        MemedFactory.TokenDataView[] memory tokenDataB = factory.getTokens(battle.memeB);
-        
-        uint256 heatA = tokenDataA[0].heat;
-        uint256 heatB = tokenDataB[0].heat;
+        uint256 heatA = factory.getHeat(battle.memeA);
+        uint256 heatB = factory.getHeat(battle.memeB);
         
         // Calculate final score: 60% engagement + 40% value
         uint256 engagementScoreA = heatA;
@@ -175,7 +162,7 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         // Update heat for winner
         MemedFactory.HeatUpdate[] memory heatUpdate = new MemedFactory.HeatUpdate[](1);
         heatUpdate[0] = MemedFactory.HeatUpdate({
-            token: actualWinner,
+            id: factory.tokenIdByAddress(actualWinner),
             heat: 20000,
             minusHeat: false
         });

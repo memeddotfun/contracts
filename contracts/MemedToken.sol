@@ -25,8 +25,6 @@ contract MemedToken is ERC20, Ownable {
     }
 
     CreatorData public creatorData;
-    bool public fairLaunchCompleted;
-    uint256 public fairLaunchTokensMinted;
     
     constructor(
         string memory _name,
@@ -48,7 +46,7 @@ contract MemedToken is ERC20, Ownable {
         _mint(_creator, CREATOR_INCENTIVES_ALLOCATION * 30 / 100);
     }
 
-    function claim() external {
+    function claimCreatorIncentives() external {
         require(msg.sender == creatorData.creator, "Only creator can claim");
         require(block.timestamp >= creatorData.lastRewardAt + 30 days, "Not enough time has passed");
         
@@ -60,23 +58,13 @@ contract MemedToken is ERC20, Ownable {
         _mint(creatorData.creator, amount);
     }
 
-    function mintFairLaunchTokens(address to, uint256 amount) external {
+    function claim(address to, uint256 amount) external {
         require(msg.sender == factoryContract, "Only factory can mint");
-        require(!fairLaunchCompleted, "Fair launch completed");
-        require(fairLaunchTokensMinted + amount <= FAIR_LAUNCH_ALLOCATION, "Exceeds fair launch allocation");
-        
-        fairLaunchTokensMinted += amount;
         _mint(to, amount);
-    }
-    
-    function completeFairLaunch() external {
-        require(msg.sender == factoryContract, "Only factory can complete");
-        fairLaunchCompleted = true;
     }
     
     function mintUniswapLP(address to) external {
         require(msg.sender == factoryContract, "Only factory can mint");
-        require(fairLaunchCompleted, "Fair launch not completed");
         _mint(to, UNISWAP_LP_ALLOCATION);
     }
 }

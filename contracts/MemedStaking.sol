@@ -151,12 +151,10 @@ contract MemedStaking is Ownable, ReentrancyGuard {
     
     function _updateGlobalRewardRates() internal {
         // Update reward rates for all active tokens
-        MemedFactory.TokenDataView[] memory allTokens = factory.getTokens(address(0));
+        MemedFactory.TokenData[] memory allTokens = factory.getTokens();
         for (uint256 i = 0; i < allTokens.length; i++) {
-            if (allTokens[i].token != address(0) && !allTokens[i].fairLaunchActive) {
                 if (!tokenQuarterConfigs[allTokens[i].token].hasCustomConfig) {
                     _updateTokenRewardRate(allTokens[i].token);
-                }
             }
         }
     }
@@ -259,7 +257,7 @@ contract MemedStaking is Ownable, ReentrancyGuard {
         
         MemedFactory.HeatUpdate[] memory heatUpdate = new MemedFactory.HeatUpdate[](1);
         heatUpdate[0] = MemedFactory.HeatUpdate({
-            token: meme,
+            id: factory.tokenIdByAddress(meme),
             heat: amount / TOKENS_PER_HEAT,
             minusHeat: false
         });
@@ -311,7 +309,7 @@ contract MemedStaking is Ownable, ReentrancyGuard {
         
         MemedFactory.HeatUpdate[] memory heatUpdate = new MemedFactory.HeatUpdate[](1);
         heatUpdate[0] = MemedFactory.HeatUpdate({
-            token: meme,
+            id: factory.tokenIdByAddress(meme),
             heat: amount / TOKENS_PER_HEAT,
             minusHeat: true
         });
