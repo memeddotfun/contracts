@@ -5,9 +5,8 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "./MemedToken.sol";
-import "./MemedStaking.sol";
 import "./MemedBattle.sol";
-import "./MemedEngageToEarn.sol";
+import "./MemedWarriorNFT.sol";
 
 // Uniswap V2 interfaces
 interface IUniswapV2Factory {
@@ -34,6 +33,12 @@ interface IUniswapV2Router02 {
     ) external returns (uint[] memory amounts);
 }
 
+interface IMemedEngageToEarn {
+    function getBattleRewardPool(address token) external view returns (uint256);
+    function transferBattleRewards(address token, address winner, uint256 amount) external;
+}
+
+
 contract MemedFactory is Ownable, ReentrancyGuard {
     uint256 constant public REWARD_PER_ENGAGEMENT = 100000;
     uint256 constant public MAX_ENGAGE_USER_REWARD_PERCENTAGE = 2;
@@ -56,14 +61,14 @@ contract MemedFactory is Ownable, ReentrancyGuard {
     // Trading fees
     uint256 public constant SELL_FEE_PERCENTAGE = 15; // 15% fee on sells
     
-    MemedStaking public memedStaking;
     MemedBattle public memedBattle;
-    MemedEngageToEarn public memedEngageToEarn;
+    IMemedEngageToEarn public memedEngageToEarn;
     IUniswapV2Router02 public uniswapV2Router;
     IUniswapV2Factory public uniswapV2Factory;
     
     struct TokenData {
         address token;
+        address warriorNFT;
         address creator;
         string name;
         string ticker;
@@ -181,14 +186,12 @@ contract MemedFactory is Ownable, ReentrancyGuard {
     );
     
     constructor(
-        address _memedStaking, 
         address _memedBattle, 
         address _memedEngageToEarn,
         address _uniswapV2Router
     ) {
-        memedStaking = MemedStaking(_memedStaking);
         memedBattle = MemedBattle(_memedBattle);
-        memedEngageToEarn = MemedEngageToEarn(_memedEngageToEarn);
+        memedEngageToEarn = IMemedEngageToEarn(_memedEngageToEarn);
         uniswapV2Router = IUniswapV2Router02(_uniswapV2Router);
         uniswapV2Factory = IUniswapV2Factory(uniswapV2Router.factory());
     }
@@ -263,9 +266,12 @@ contract MemedFactory is Ownable, ReentrancyGuard {
                 token.name,
                 token.ticker,
                 token.creator,
-                address(memedStaking),
-                address(memedEngageToEarn)
+                address(memedEngageToEarn),
+                address(memedBattle)
             );
+
+            MemedWarriorNFT warriorNFT = new MemedWarriorNFT(address(memedToken));
+            token.warriorNFT = address(warriorNFT);
             
             token.token = address(memedToken);
             fairLaunch.status = FairLaunchStatus.COMPLETED;
@@ -282,7 +288,6 @@ contract MemedFactory is Ownable, ReentrancyGuard {
             // Create Uniswap pair and add liquidity
             _createUniswapLP(_id, address(memedToken), lpAmount);
 
-            memedStaking.setTokenQuarterConfig(address(memedToken));
             tokenIdByAddress[address(memedToken)] = _id;
             
             emit TokenCreated(
@@ -338,16 +343,16 @@ contract MemedFactory is Ownable, ReentrancyGuard {
     }
 
     function swap(
-        address _token,
         uint256 _amount,
-        address[] calldata _path
+        address[] calldata _path,
+        address _to
     ) external nonReentrant returns (uint256[] memory) {
-        IERC20(_token).approve(address(uniswapV2Router), _amount);
+        IERC20(_path[0]).approve(address(uniswapV2Router), _amount);
         uint256[] memory amounts = uniswapV2Router.swapExactTokensForTokens(
             _amount,
             0,
             _path,
-            address(this),
+            _to,
             block.timestamp + 300
         );
         return amounts;
@@ -470,7 +475,6 @@ contract MemedFactory is Ownable, ReentrancyGuard {
 
     function updateHeat(HeatUpdate[] calldata _heatUpdates) public {
         require(
-            msg.sender == address(memedStaking) || 
             msg.sender == address(memedBattle) || 
             msg.sender == owner(), 
             "unauthorized"
@@ -480,8 +484,6 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         HeatUpdate[] memory heatUpdatesMemory = new HeatUpdate[](_heatUpdates.length);
         for(uint i = 0; i < _heatUpdates.length; i++) {
             heatUpdatesMemory[i] = _heatUpdates[i];
-            // Additional check for staking contract minus heat permission
-            require(!_heatUpdates[i].minusHeat || (msg.sender == address(memedStaking)), "Only staking can minus heat");
         }
         
         _updateHeatInternal(heatUpdatesMemory);
@@ -489,6 +491,10 @@ contract MemedFactory is Ownable, ReentrancyGuard {
 
     function getByToken(address _token) public view returns (TokenData memory) {
         return tokenData[tokenIdByAddress[_token]];
+    }
+
+    function getWarriorNFT(address _token) external view returns (address) {
+        return tokenData[tokenIdByAddress[_token]].warriorNFT;
     }
 
     function getHeat(address _token) external view returns (uint256) {
