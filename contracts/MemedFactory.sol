@@ -34,8 +34,11 @@ interface IUniswapV2Router02 {
 }
 
 interface IMemedEngageToEarn {
-    function getBattleRewardPool(address token) external view returns (uint256);
-    function transferBattleRewards(address token, address winner, uint256 amount) external;
+    function isRewardable(address _token) external view returns (bool);
+    function registerEngagementReward(address _token) external;
+    function getBattleRewardPool(address _token) external view returns (uint256);
+    function transferBattleRewards(address _loser, address _winner, uint256 _amount) external returns (uint256);
+    function claimBattleRewards(address _token, address _winner, uint256 _amount) external;
 }
 
 
@@ -61,6 +64,9 @@ contract MemedFactory is Ownable, ReentrancyGuard {
     // Trading fees
     uint256 public constant SELL_FEE_PERCENTAGE = 15; // 15% fee on sells
     
+    // Engagement rewards
+    uint256 public constant ENGAGEMENT_REWARDS_PER_NEW_HEAT = 50000; // For every 50,000 heat, 1 engagement reward is given
+    
     MemedBattle public memedBattle;
     IMemedEngageToEarn public memedEngageToEarn;
     IUniswapV2Router02 public uniswapV2Router;
@@ -75,6 +81,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         string description;
         string image;
         string lensUsername;
+        uint256 lastRewardAt;
         uint256 createdAt;
     }
 
@@ -103,14 +110,12 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         mapping(address => uint256) balance;
         uint256 lastEngagementBoost;
         uint256 heat;
-        uint256 lastRewardAt;
         uint256 createdAt;
     }
 
     struct HeatUpdate {
         uint256 id;
         uint256 heat;
-        bool minusHeat;
     }
     
     // Engagement types for heat calculation
@@ -266,8 +271,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
                 token.name,
                 token.ticker,
                 token.creator,
-                address(memedEngageToEarn),
-                address(memedBattle)
+                address(memedEngageToEarn)
             );
 
             MemedWarriorNFT warriorNFT = new MemedWarriorNFT(address(memedToken));
@@ -450,8 +454,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         HeatUpdate[] memory heatUpdate = new HeatUpdate[](1);
         heatUpdate[0] = HeatUpdate({
             id: _id,
-            heat: heatIncrease,
-            minusHeat: false
+            heat: heatIncrease
         });
         _updateHeatInternal(heatUpdate);
     }
@@ -460,15 +463,11 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         for(uint i = 0; i < _heatUpdates.length; i++) {
             TokenData storage token = tokenData[_heatUpdates[i].id];
             FairLaunchData storage fairLaunch = fairLaunchData[_heatUpdates[i].id];
-            if(_heatUpdates[i].minusHeat) {
-                fairLaunch.heat -= _heatUpdates[i].heat;
-            } else {
-                fairLaunch.heat += _heatUpdates[i].heat;
-            }
+            fairLaunch.heat += _heatUpdates[i].heat;
             
-            if (fairLaunch.status == FairLaunchStatus.COMPLETED && (fairLaunch.heat - fairLaunch.lastRewardAt) >= REWARD_PER_ENGAGEMENT && memedEngageToEarn.isRewardable(token.token)) {
-                memedEngageToEarn.reward(token.token);
-                fairLaunch.lastRewardAt = fairLaunch.heat;
+            if (fairLaunch.status == FairLaunchStatus.COMPLETED && (fairLaunch.heat - token.lastRewardAt) >= ENGAGEMENT_REWARDS_PER_NEW_HEAT && memedEngageToEarn.isRewardable(token.token)) {
+                memedEngageToEarn.registerEngagementReward(token.token);
+                token.lastRewardAt = fairLaunch.heat;
             }
         }
     }

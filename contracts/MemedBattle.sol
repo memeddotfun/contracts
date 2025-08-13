@@ -8,10 +8,8 @@ import "./MemedFactory.sol";
 
 
 interface IMemedWarriorNFT {
-    function hasActiveWarrior(address user) external view returns (bool);
     function memedToken() external view returns (address);
-    function getUserActiveNFTs(address user) external view returns (uint256[] memory);
-    function getCurrentPrice(uint256 tokenId) external view returns (uint256);
+    function getCurrentPrice() external view returns (uint256);
 }
 
 
@@ -19,7 +17,6 @@ interface IMemedWarriorNFT {
 /// @title MemedBattle Contract
 contract MemedBattle is Ownable, ReentrancyGuard {
     MemedFactory public factory;
-    
     // Battle constants from Memed.fun v2.3 specification
     uint256 public constant ENGAGEMENT_WEIGHT = 60; // 60% engagement, 40% value
     uint256 public constant VALUE_WEIGHT = 40;
@@ -102,14 +99,14 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         require(nftWarrior == msg.sender, "Unauthorized");
         UserBattleAllocation storage allocation = battleAllocations[_battleId][_user][_supportedMeme];
         if(allocation.nftsIds.length == 0) {
-            allocation = UserBattleAllocation({
-                battleId: _battleId,
-                user: _user,
-                supportedMeme: _supportedMeme,
-                nftsIds: _nftsIds,
-                claimed: false,
-                getBack: false
-            });
+            allocation.battleId = _battleId;
+            allocation.user = _user;
+            allocation.supportedMeme = _supportedMeme;
+            allocation.claimed = false;
+            allocation.getBack = false;
+            for (uint256 i = 0; i < _nftsIds.length; i++) {
+                allocation.nftsIds.push(_nftsIds[i]);
+            }
         }else{
             for (uint256 i = 0; i < _nftsIds.length; i++) {
                 allocation.nftsIds.push(_nftsIds[i]);
@@ -152,6 +149,7 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         uint256 finalScoreB = (heatB * ENGAGEMENT_WEIGHT + valueScoreB * VALUE_WEIGHT) / 100;
         
         address actualWinner = finalScoreA >= finalScoreB ? battle.memeA : battle.memeB;
+        address actualLoser = actualWinner == battle.memeA ? battle.memeB : battle.memeA;
         battle.winner = actualWinner;
         battle.resolved = true;
         
@@ -159,7 +157,7 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         // Winner receives 5% of engagement rewards pool (swapped to winner's token)
         uint256 battleRewardAmount = factory.memedEngageToEarn().getBattleRewardPool(actualWinner);
         if (battleRewardAmount > 0) {
-            uint256 reward = factory.memedEngageToEarn().transferBattleRewards(actualWinner, battle.winner == battle.memeA ? battle.creatorA : battle.creatorB, battleRewardAmount);
+            uint256 reward = factory.memedEngageToEarn().transferBattleRewards(actualLoser, actualWinner, battleRewardAmount);
             battle.totalReward = reward;
         }
         
@@ -167,8 +165,7 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         MemedFactory.HeatUpdate[] memory heatUpdate = new MemedFactory.HeatUpdate[](1);
         heatUpdate[0] = MemedFactory.HeatUpdate({
             id: factory.tokenIdByAddress(actualWinner),
-            heat: 20000, // Heat boost for winning
-            minusHeat: false
+            heat: 20000 // Heat boost for winning
         });
         factory.updateHeat(heatUpdate);
         
@@ -188,7 +185,7 @@ contract MemedBattle is Ownable, ReentrancyGuard {
     function setFactory(address payable _factory) external onlyOwner {
         require(address(factory) == address(0), "Factory already set");
         factory = MemedFactory(_factory);
-        }
+    }
     
 
     
@@ -212,13 +209,21 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         return battlesArray;
     }
     
+    function getBattle(uint256 _battleId) external view returns (Battle memory) {
+        return battles[_battleId];
+    }
+
+    function getBattleAllocations(uint256 _battleId, address _user, address _meme) external view returns (UserBattleAllocation memory) {
+        return battleAllocations[_battleId][_user][_meme];
+    }
+
     function getUserClaimableRewards(address _user, address _token) public view returns (uint256) {
         uint256 userReward;
         uint256[] memory battleIdsArray = battleIds[_token];
         for (uint256 i = 0; i < battleIdsArray.length; i++) {
             Battle storage battle = battles[battleIdsArray[i]];
-            if (battle.resolved && battle.winner == _token && !battleAllocations[battle.battleId][userAllocationIndex[battle.battleId][_user]].claimed) {
-                userReward += battle.totalReward * battleAllocations[battle.battleId][userAllocationIndex[battle.battleId][_user]].nftsIds.length / (battle.winner == battle.memeA ? battle.memeANftsAllocated : battle.memeBNftsAllocated);
+            if (battle.resolved && battle.winner == _token && !battleAllocations[battle.battleId][_user][_token].claimed) {
+                userReward += battle.totalReward * battleAllocations[battle.battleId][_user][_token].nftsIds.length / (battle.winner == battle.memeA ? battle.memeANftsAllocated : battle.memeBNftsAllocated);
             }
         }
         return userReward;

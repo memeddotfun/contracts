@@ -8,10 +8,12 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 interface IMemedWarriorNFT {
     function hasActiveWarrior(address user) external view returns (bool);
     function getUserActiveNFTs(address user) external view returns (uint256[] memory);
-    function getCurrentPrice(uint256 tokenId) external view returns (uint256);
+    function getCurrentPrice() external view returns (uint256);
+    function getWarriorMintedBeforeByUser(address _user, uint256 _timestamp) external view returns (uint256);
 }
 
 interface IMemedFactory {
+    function getWarriorNFT(address _token) external view returns (address);
     function swap(uint256 _amount, address[] calldata _path, address _to) external returns (uint256[] memory);
 }
 
@@ -21,15 +23,49 @@ contract MemedEngageToEarn is Ownable {
     uint256 public constant ENGAGEMENT_REWARDS_PER_NFT_PERCENTAGE = 20; // 20% of engagement rewards per nft as per their price
     
     IMemedFactory public factory;
-    uint256 public totalEngagementRewards;
+    uint256 public engagementRewardId;
     
     struct EngagementReward {
-        uint256 amount;
+        address token;
+        uint256 amountClaimed;
         uint256 nftPrice;
         uint256 timestamp;
     }
 
-    mapping(address => EngagementReward) public engagementRewards;
+    mapping(uint256 => EngagementReward) public engagementRewards;
+    mapping(address => uint256) public totalClaimed;
+    mapping(uint256 => mapping(address => bool)) public isClaimedByUser;
+
+    event EngagementRewardRegistered(uint256 indexed rewardId, address indexed token, uint256 nftPrice, uint256 timestamp);
+    event EngagementRewardClaimed(address indexed user, uint256 indexed rewardId, uint256 amount);
+
+    function getEngagementReward(uint256 _rewardId) external view returns (EngagementReward memory) {
+        return engagementRewards[_rewardId];
+    }
+
+    function registerEngagementReward(address _token) external {
+        require(msg.sender == address(factory), "Only factory can register engagement rewards");
+        uint256 nftPrice = IMemedWarriorNFT(factory.getWarriorNFT(_token)).getCurrentPrice();
+        uint256 totalNFTs = IMemedWarriorNFT(factory.getWarriorNFT(_token)).getWarriorMintedBeforeByUser(address(this), block.timestamp);
+        uint256 totalReward = (totalNFTs * nftPrice * ENGAGEMENT_REWARDS_PER_NFT_PERCENTAGE) / 100;
+        require(totalReward > 0, "No reward");
+        require(totalClaimed[_token] + totalReward <= MAX_REWARD, "Max reward reached");
+        totalClaimed[_token] += totalReward;
+        engagementRewardId++;
+        engagementRewards[engagementRewardId] = EngagementReward(_token, 0, nftPrice, block.timestamp);
+        emit EngagementRewardRegistered(engagementRewardId, _token, nftPrice, block.timestamp);
+    }
+
+    function claimEngagementReward(uint256 _rewardId) external {
+        require(!isClaimedByUser[_rewardId][msg.sender], "Already claimed");
+        EngagementReward memory reward = engagementRewards[_rewardId];
+        uint256 nftCount = IMemedWarriorNFT(factory.getWarriorNFT(reward.token)).getWarriorMintedBeforeByUser(msg.sender, reward.timestamp);
+        uint256 amount = ((reward.nftPrice * nftCount) * ENGAGEMENT_REWARDS_PER_NFT_PERCENTAGE) / 100;
+        IERC20(reward.token).transfer(msg.sender, amount);
+        isClaimedByUser[_rewardId][msg.sender] = true;
+        engagementRewards[_rewardId].amountClaimed += amount;
+        emit EngagementRewardClaimed(msg.sender, _rewardId, amount);
+    }
 
     /**
      * @dev Get battle reward pool (5% of engagement rewards per cycle)
@@ -42,12 +78,12 @@ contract MemedEngageToEarn is Ownable {
     /**
      * @dev Swap tokens to winner (called by battle contract)
      */
-    function transferBattleRewards(address _token, address _winner, uint256 _amount) external returns (uint256) {
+    function transferBattleRewards(address _loser, address _winner, uint256 _amount) external returns (uint256) {
         require(msg.sender == address(factory), "Only factory can transfer battle rewards");
-        require(IERC20(_token).balanceOf(address(this)) >= _amount, "Insufficient balance");
-        IERC20(_token).transfer(address(factory), _amount);
+        require(IERC20(_loser).balanceOf(address(this)) >= _amount, "Insufficient balance");
+        IERC20(_loser).transfer(address(factory), _amount);
         address[] memory path = new address[](2);
-        path[0] = _token;
+        path[0] = _loser;
         path[1] = _winner;
         uint256[] memory amounts = factory.swap(_amount, path, _winner);
         require(amounts[1] > 0, "Swap failed");
@@ -65,4 +101,9 @@ contract MemedEngageToEarn is Ownable {
         factory = IMemedFactory(_factory);
     }
     
+    function isRewardable(address _token) external view returns (bool) {
+        uint256 totalNFTs = IMemedWarriorNFT(factory.getWarriorNFT(_token)).getWarriorMintedBeforeByUser(address(this), block.timestamp);
+        uint256 totalReward = (totalNFTs * IMemedWarriorNFT(factory.getWarriorNFT(_token)).getCurrentPrice() * ENGAGEMENT_REWARDS_PER_NFT_PERCENTAGE) / 100;
+        return totalClaimed[_token] + totalReward <= IERC20(_token).balanceOf(address(this));
+    }
 }

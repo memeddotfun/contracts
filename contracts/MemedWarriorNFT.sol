@@ -150,7 +150,7 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
     function getBackWarrior(uint256 _battleId) external {
         MemedBattle.Battle memory battle = memedBattle.getBattle(_battleId);
         require(battle.winner == memedToken, "Not the winner");
-        MemedBattle.UserBattleAllocation memory allocation = memedBattle.getBattleAllocations(_battleId, msg.sender);
+        MemedBattle.UserBattleAllocation memory allocation = memedBattle.getBattleAllocations(_battleId, msg.sender, memedToken);
         require(allocation.nftsIds.length > 0, "No allocation found");
         memedBattle.getBackWarrior(_battleId, msg.sender);
         for (uint256 i = 0; i < allocation.nftsIds.length; i++) {
@@ -267,5 +267,16 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
     // Admin functions
     function setAuthorizedBurner(address _burner, bool _authorized) external onlyOwner {
         authorizedBurners[_burner] = _authorized;
+    }
+
+    function getWarriorMintedBeforeByUser(address _user, uint256 _timestamp) external view returns (uint256) {
+        uint256[] memory nfts = userNFTs[_user];
+        uint256 count = 0;
+        for (uint256 i = 0; i < nfts.length; i++) {
+            if (warriors[nfts[i]].mintedAt < _timestamp) {
+                count++;
+            }
+        }
+        return count;
     }
 }
