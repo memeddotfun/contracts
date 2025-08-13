@@ -117,14 +117,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         uint256 id;
         uint256 heat;
     }
-    
-    // Engagement types for heat calculation
-    struct EngagementData {
-        uint256 likes;
-        uint256 mirrors;
-        uint256 quotes;
-    }
-    
+
     uint256 public id;
     address[] public tokens;
 
@@ -188,6 +181,12 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         uint256 tokenAmount,
         uint256 ethReceived,
         uint256 feeAmount
+    );
+
+    event HeatUpdated(
+        uint256 indexed id,
+        uint256 heat,
+        uint256 timestamp
     );
     
     constructor(
@@ -434,31 +433,6 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         return (BASE_PRICE * priceMultiplier) / 1e18;
     }
     
-    function updateEngagement(
-        uint256 _id,
-        EngagementData calldata _engagement
-    ) external onlyOwner {
-        FairLaunchData storage fairLaunch = fairLaunchData[_id];
-        require(fairLaunch.status == FairLaunchStatus.COMPLETED, "Fair launch not completed");
-        
-        // Calculate heat using proper formula: (Likes × 1) + (Mirrors × 3) + (Quotes × 5)
-        uint256 heatIncrease = _engagement.likes + (_engagement.mirrors * 3) + (_engagement.quotes * 5);
-        
-        // Update k-value for bonding curve (boost for 24h)
-        if (block.timestamp < fairLaunch.lastEngagementBoost + 1 days) {
-            fairLaunch.kValue += K_BOOST_PER_ENGAGEMENT;
-        }
-        fairLaunch.lastEngagementBoost = block.timestamp;
-        
-        // Create memory array for heat update
-        HeatUpdate[] memory heatUpdate = new HeatUpdate[](1);
-        heatUpdate[0] = HeatUpdate({
-            id: _id,
-            heat: heatIncrease
-        });
-        _updateHeatInternal(heatUpdate);
-    }
-    
     function _updateHeatInternal(HeatUpdate[] memory _heatUpdates) internal {
         for(uint i = 0; i < _heatUpdates.length; i++) {
             TokenData storage token = tokenData[_heatUpdates[i].id];
@@ -469,6 +443,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
                 memedEngageToEarn.registerEngagementReward(token.token);
                 token.lastRewardAt = fairLaunch.heat;
             }
+            emit HeatUpdated(_heatUpdates[i].id, fairLaunch.heat, block.timestamp);
         }
     }
 
