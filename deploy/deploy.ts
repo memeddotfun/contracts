@@ -5,6 +5,7 @@ import path from "node:path";
 
 export default async function (hre: HardhatRuntimeEnvironment) {
   const wallet = getWallet();
+  const uniswapV2Router = hre.network.name == "lensTestnet" ? "0x57a894B5d54658340C50be5B99Fd949b038Ec5DA" : "0x6ddD32cd941041D8b61df213B9f515A7D288Dc13";
   const memedBattle = await deployContract("MemedBattle", [], {
     hre,
     wallet,
@@ -17,10 +18,10 @@ export default async function (hre: HardhatRuntimeEnvironment) {
   });
   const memedBattleAddress = await memedBattle.getAddress();
   const memedEngageToEarnAddress = await memedEngageToEarn.getAddress();
-  const factory = await deployContract("MemedFactory_test", [memedBattleAddress, memedEngageToEarnAddress, memedBattleAddress], {
+  const factory = await deployContract("MemedFactory_test", [memedBattleAddress, memedEngageToEarnAddress, uniswapV2Router], {
     hre,
     wallet,
-    verify: true,
+    verify: false,
   });
   const config = {
     factory: await factory.getAddress(),

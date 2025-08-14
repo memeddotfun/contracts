@@ -21,6 +21,7 @@ const config = {
       verifyURL:
         "https://api-explorer-verify.staging.lens.zksync.dev/contract_verification",
       zksync: true,
+      ethNetwork: "sepolia",
     },
     hardhat: {
       loggingEnabled: true,

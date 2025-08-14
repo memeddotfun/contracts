@@ -10,8 +10,8 @@ import "./MemedBattle.sol";
 interface IMemedFactory {
     function getHeat(address token) external view returns (uint256);
     function owner() external view returns (address);
-    function PLATFORM_FEE_PERCENTAGE() external view returns (uint256);
-    function FEE_DENOMINATOR() external view returns (uint256);
+    function platformFeePercentage() external view returns (uint256);
+    function feeDenominator() external view returns (uint256);
     function getByToken(address token) external view returns (
         address token_addr,
         address creator,
@@ -114,7 +114,7 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
         );
         
         // Calculate 1% platform fee
-        uint256 platformFee = (price * factory.PLATFORM_FEE_PERCENTAGE()) / factory.FEE_DENOMINATOR();
+        uint256 platformFee = (price * factory.platformFeePercentage()) / factory.feeDenominator();
         uint256 amountToBurn = price - platformFee;
         
         // Send platform fee to factory owner (if fee > 0)
@@ -305,6 +305,6 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
      * @dev Calculate platform fee for a given price
      */
     function calculateMintingFee(uint256 _price) external view returns (uint256) {
-        return (_price * factory.PLATFORM_FEE_PERCENTAGE()) / factory.FEE_DENOMINATOR();
+        return (_price * factory.platformFeePercentage()) / factory.feeDenominator();
     }
 }
