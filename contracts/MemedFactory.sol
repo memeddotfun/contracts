@@ -64,7 +64,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
     uint256 public maxWalletCommitment = 500 * 1e18; // 500 native token
     uint256 public maxWalletCommitmentNoSocial = 300 * 1e18; // 300 native token without social proof
     
-    // Platform fee for trading fees and minting fee
+    // Platform fee for trading fees, minting fee, and LP fee
     uint256 public platformFeePercentage = 10; // 1% to platform (10/1000)
     uint256 public feeDenominator = 1000; // For 1% fee calculation
     
