@@ -533,7 +533,7 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
     function _tokenExists() internal view returns (bool) {
         uint256[] memory tokenIds = tokenIdsByCreator[msg.sender];
         for(uint i = 0; i < tokenIds.length; i++) {
-            if(fairLaunchData[tokenIds[i]].status == FairLaunchStatus.COMPLETED) {
+            if(fairLaunchData[tokenIds[i]].status == FairLaunchStatus.COMPLETED || fairLaunchData[tokenIds[i]].status == FairLaunchStatus.ACTIVE) {
                 return true;
             }
         }
