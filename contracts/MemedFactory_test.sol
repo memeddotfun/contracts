@@ -9,11 +9,11 @@ import "./MemedBattle.sol";
 import "./MemedWarriorNFT.sol";
 
 // Uniswap V2 interfaces
-interface IUniswapV2Factory {
+interface IUniswapV2Factory_test {
     function createPair(address tokenA, address tokenB) external returns (address pair);
 }
 
-interface IUniswapV2Router02 {
+interface IUniswapV2Router02_test {
     function factory() external pure returns (address);
     function WETH() external pure returns (address);
     function swapExactTokensForETH(
@@ -40,7 +40,7 @@ interface IUniswapV2Router02 {
     ) external returns (uint[] memory amounts);
 }
 
-interface IMemedEngageToEarn {
+interface IMemedEngageToEarn_test {
     function isRewardable(address _token) external view returns (bool);
     function registerEngagementReward(address _token) external;
     function getBattleRewardPool(address _token) external view returns (uint256);
@@ -49,7 +49,7 @@ interface IMemedEngageToEarn {
 }
 
 
-contract MemedFactory is Ownable, ReentrancyGuard {
+contract MemedFactory_test is Ownable, ReentrancyGuard {
     uint256 constant public REWARD_PER_ENGAGEMENT = 100000;
     uint256 constant public MAX_ENGAGE_USER_REWARD_PERCENTAGE = 2;
     uint256 constant public MAX_ENGAGE_CREATOR_REWARD_PERCENTAGE = 1;
@@ -62,7 +62,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
     uint256 public constant FAIR_LAUNCH_DURATION = 7 days;
     uint256 public minFundingGoal = 20000 * 1e18; // 20,000 native token
     uint256 public maxWalletCommitment = 500 * 1e18; // 500 native token
-    uint256 public maxWalletCommitmentNoSocial = 300 * 1e18; // 300 native token without social proof
+    uint256 public maxWalletCommitmentNoSocial = 30000 * 1e18; // 30000 native token without social proof
     
     // Platform fee for trading fees and minting fee
     uint256 public platformFeePercentage = 10; // 1% to platform (10/1000)
@@ -72,9 +72,9 @@ contract MemedFactory is Ownable, ReentrancyGuard {
     uint256 public constant ENGAGEMENT_REWARDS_PER_NEW_HEAT = 50000; // For every 50,000 heat, 1 engagement reward is given
     
     MemedBattle public memedBattle;
-    IMemedEngageToEarn public memedEngageToEarn;
-    IUniswapV2Router02 public uniswapV2Router;
-    IUniswapV2Factory public uniswapV2Factory;
+    IMemedEngageToEarn_test public memedEngageToEarn;
+    IUniswapV2Router02_test public uniswapV2Router;
+    IUniswapV2Factory_test public uniswapV2Factory;
     
     struct TokenData {
         address token;
@@ -222,9 +222,9 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         address _uniswapV2Router
     ) {
         memedBattle = MemedBattle(_memedBattle);
-        memedEngageToEarn = IMemedEngageToEarn(_memedEngageToEarn);
-        uniswapV2Router = IUniswapV2Router02(_uniswapV2Router);
-        uniswapV2Factory = IUniswapV2Factory(uniswapV2Router.factory());
+        memedEngageToEarn = IMemedEngageToEarn_test(_memedEngageToEarn);
+        uniswapV2Router = IUniswapV2Router02_test(_uniswapV2Router);
+        uniswapV2Factory = IUniswapV2Factory_test(uniswapV2Router.factory());
     }
 
     function startFairLaunch(
@@ -259,18 +259,18 @@ contract MemedFactory is Ownable, ReentrancyGuard {
     
     function commitToFairLaunch(
         uint256 _id
-    ) external payable nonReentrant {
+    ) external nonReentrant {
         FairLaunchData storage fairLaunch = fairLaunchData[_id];
         require(fairLaunch.status == FairLaunchStatus.ACTIVE, "Fair launch not active");
         require(block.timestamp <= fairLaunch.fairLaunchStartTime + FAIR_LAUNCH_DURATION, "Fair launch ended");
-        require(msg.value > 0, "Must send ETH");
+        uint256 ethAmount = 5000*1e18;
         
         // Calculate platform fee (1%)
-        uint256 platformFee = (msg.value * platformFeePercentage) / feeDenominator;
-        uint256 ethAfterFee = msg.value - platformFee;
+        uint256 platformFee = (ethAmount * platformFeePercentage) / feeDenominator;
+        uint256 ethAfterFee = ethAmount - platformFee;
         
         uint256 maxCommitment = hasLensVerification[msg.sender] ? maxWalletCommitment : maxWalletCommitmentNoSocial;
-        require(fairLaunch.commitments[msg.sender].amount + msg.value <= maxCommitment, "Exceeds wallet limit");
+        require(fairLaunch.commitments[msg.sender].amount + ethAmount <= maxCommitment, "Exceeds wallet limit");
         uint256 tokenAmount = getNativeToTokenAmount(_id, ethAfterFee);
         require(tokenAmount > 0, "Insufficient ETH");
         require(fairLaunch.totalSold + tokenAmount <= INITIAL_SUPPLY, "Exceeds initial supply");
@@ -291,7 +291,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         fairLaunch.totalCommitted += ethAfterFee; // Track committed amount after fee
         fairLaunch.balance[msg.sender] += tokenAmount;
         
-        emit CommitmentMade(_id, msg.sender, msg.value, hasLensVerification[msg.sender]);
+        emit CommitmentMade(_id, msg.sender, ethAmount, hasLensVerification[msg.sender]);
      
         // Check if we can launch early
         if (fairLaunch.totalCommitted >= minFundingGoal) {
@@ -323,16 +323,8 @@ contract MemedFactory is Ownable, ReentrancyGuard {
             fairLaunch.status = FairLaunchStatus.COMPLETED;
             tokens.push(address(memedToken));
             
-            // Calculate fund distribution: 1% platform, 99% LP
-            uint256 platformFee = (fairLaunch.totalCommitted * platformFeePercentage) / feeDenominator;
-            uint256 lpAmount = fairLaunch.totalCommitted - platformFee;
-            
-            // Send platform fee to owner
-            (bool success, ) = payable(owner()).call{value: platformFee}("");
-            require(success, "Transfer failed");
-            
             // Create Uniswap pair and add liquidity
-            _createUniswapLP(_id, address(memedToken), lpAmount);
+         //   _createUniswapLP(_id, address(memedToken), lpAmount);
 
             tokenIdByAddress[address(memedToken)] = _id;
             
@@ -389,37 +381,25 @@ contract MemedFactory is Ownable, ReentrancyGuard {
     }
 
     function swap(
-        uint256 _amount,
-        address[] calldata _path,
-        address _to
-    ) external nonReentrant returns (uint256[] memory) {
-        IERC20(_path[0]).approve(address(uniswapV2Router), _amount);
-        uint256[] memory amounts = uniswapV2Router.swapExactTokensForTokens(
-            _amount,
-            0,
-            _path,
-            _to,
-            block.timestamp + 300
-        );
+        uint256,
+        address[] calldata,
+        address
+    ) external pure returns (uint256[] memory) {
+        uint256[] memory amounts = new uint256[](2);
+        amounts[0] = 5;
+        amounts[1] = 5;
         return amounts;
     }
 
     function swapExactForNativeToken(
-        uint256 _amount,
-        address _token,
-        address _to
-    ) external returns (uint[] memory amounts) {
-        IERC20(_token).approve(address(uniswapV2Router), _amount);
-        address[] memory path = new address[](2);
-        path[0] = _token;
-        path[1] = uniswapV2Router.WETH();
-        return uniswapV2Router.swapExactTokensForETH(
-            _amount,
-            0,
-            path,
-            _to,
-            block.timestamp + 300
-        );
+        uint256,
+        address,
+        address
+    ) external pure returns (uint256[] memory) {
+        uint256[] memory amounts = new uint256[](2);
+        amounts[0] = 5;
+        amounts[1] = 5;
+        return amounts;
     }
 
     function sellTokens(uint256 _id, uint256 _amount) external nonReentrant {
@@ -433,21 +413,14 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         uint256 platformFee = (ethValue * platformFeePercentage) / feeDenominator;
         uint256 ethToUser = ethValue - platformFee;
         
-        require(address(this).balance >= ethValue, "Insufficient ETH in contract");
-        
         // Send platform fee to owner
         if (platformFee > 0) {
-            (bool feeSuccess, ) = payable(owner()).call{value: platformFee}("");
-            require(feeSuccess, "Fee transfer failed");
             emit PlatformFeeCollected(_id, msg.sender, platformFee, "sell");
         }
         
         fairLaunch.balance[msg.sender] -= _amount;
         fairLaunch.totalSold -= _amount;
         fairLaunch.totalCommitted -= ethValue;
-
-        (bool success, ) = payable(msg.sender).call{value: ethToUser}("");
-        require(success, "Transfer failed");
         
         emit TokenSold(_id, msg.sender, _amount, ethToUser);
     }

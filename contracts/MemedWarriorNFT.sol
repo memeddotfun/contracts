@@ -9,6 +9,9 @@ import "./MemedBattle.sol";
 
 interface IMemedFactory {
     function getHeat(address token) external view returns (uint256);
+    function owner() external view returns (address);
+    function PLATFORM_FEE_PERCENTAGE() external view returns (uint256);
+    function FEE_DENOMINATOR() external view returns (uint256);
     function getByToken(address token) external view returns (
         address token_addr,
         address creator,
@@ -19,6 +22,11 @@ interface IMemedFactory {
         string memory lensUsername,
         uint256 createdAt
     );
+    function swapExactForNativeToken(
+        uint256 _amount,
+        address _token,
+        address _to
+    ) external returns (uint[] memory amounts);
 }
 
 contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
@@ -44,14 +52,13 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
     
     mapping(uint256 => WarriorData) public warriors;
     mapping(address => uint256[]) public userNFTs; // Track user's NFTs
-    mapping(address => bool) public authorizedBurners; // Contracts that can burn NFTs (battle contract)
     
     event WarriorMinted(
         uint256 indexed tokenId, 
-        address indexed owner, 
+        address indexed owner,
         uint256 price
     );
-    
+
     event WarriorBurned(
         uint256 indexed tokenId, 
         address indexed owner
@@ -64,16 +71,19 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
     
     event TokensBurned(uint256 amount, uint256 totalPlatformHeat);
     
-    modifier onlyAuthorizedBurner() {
-        require(authorizedBurners[msg.sender] || msg.sender == owner(), "Not authorized to burn");
-        _;
-    }
+    event MintingFeeCollected(
+        address indexed user,
+        uint256 feeAmount,
+        uint256 tokenId
+    );
     
     constructor(
-        address _memedToken
+        address _memedToken,
+        address _memedBattle
     ) ERC721("Memed Warrior", "WARRIOR") {
         factory = IMemedFactory(msg.sender);
         memedToken = _memedToken; 
+        memedBattle = MemedBattle(_memedBattle);
     }
     
     /**
@@ -87,12 +97,12 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
     }
     
     /**
-     * @dev Mint a Warrior NFT - requires MEME tokens which are burned
+     * @dev Mint a Warrior NFT - requires MEME tokens, 1% fee collected, rest burned
      */
     function mintWarrior() external nonReentrant returns (uint256) {
         uint256 price = getCurrentPrice();
         
-        // Check and transfer MEME tokens (which will be burned)
+        // Check and transfer MEME tokens
         require(
             IERC20(memedToken).balanceOf(msg.sender) >= price,
             "Insufficient MEME tokens"
@@ -103,12 +113,28 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
             "Transfer failed"
         );
         
-        // Burn the MEME tokens (100% burn as per specification)
-        _burnTokens(price);
+        // Calculate 1% platform fee
+        uint256 platformFee = (price * factory.PLATFORM_FEE_PERCENTAGE()) / factory.FEE_DENOMINATOR();
+        uint256 amountToBurn = price - platformFee;
+        
+        // Send platform fee to factory owner (if fee > 0)
+        if (platformFee > 0) {
+            address factoryOwner = factory.owner();
+            IERC20(memedToken).transfer(address(factory), platformFee);
+            factory.swapExactForNativeToken(platformFee, memedToken, factoryOwner);
+        }
+        
+        // Burn the remaining MEME tokens (99% as per new specification)
+        _burnTokens(amountToBurn);
         
         // Mint NFT
         currentTokenId++;
         uint256 tokenId = currentTokenId;
+        
+        // Emit fee collection event (if fee > 0)
+        if (platformFee > 0) {
+            emit MintingFeeCollected(msg.sender, platformFee, tokenId);
+        }
         
         _safeMint(msg.sender, tokenId);
         
@@ -264,11 +290,6 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
         }
     }
     
-    // Admin functions
-    function setAuthorizedBurner(address _burner, bool _authorized) external onlyOwner {
-        authorizedBurners[_burner] = _authorized;
-    }
-
     function getWarriorMintedBeforeByUser(address _user, uint256 _timestamp) external view returns (uint256) {
         uint256[] memory nfts = userNFTs[_user];
         uint256 count = 0;
@@ -278,5 +299,12 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
             }
         }
         return count;
+    }
+    
+    /**
+     * @dev Calculate platform fee for a given price
+     */
+    function calculateMintingFee(uint256 _price) external view returns (uint256) {
+        return (_price * factory.PLATFORM_FEE_PERCENTAGE()) / factory.FEE_DENOMINATOR();
     }
 }

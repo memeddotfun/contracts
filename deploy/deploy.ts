@@ -5,11 +5,6 @@ import path from "node:path";
 
 export default async function (hre: HardhatRuntimeEnvironment) {
   const wallet = getWallet();
-  const memedStaking = await deployContract("MemedStaking", [], {
-    hre,
-    wallet,
-    verify: true,
-  });
   const memedBattle = await deployContract("MemedBattle", [], {
     hre,
     wallet,
@@ -20,17 +15,15 @@ export default async function (hre: HardhatRuntimeEnvironment) {
     wallet,
     verify: true,
   });
-  const memedStakingAddress = await memedStaking.getAddress();
   const memedBattleAddress = await memedBattle.getAddress();
   const memedEngageToEarnAddress = await memedEngageToEarn.getAddress();
-  const factory = await deployContract("MemedFactory", [memedStakingAddress, memedBattleAddress, memedEngageToEarnAddress], {
+  const factory = await deployContract("MemedFactory_test", [memedBattleAddress, memedEngageToEarnAddress, memedBattleAddress], {
     hre,
     wallet,
     verify: true,
   });
   const config = {
     factory: await factory.getAddress(),
-    memedStaking: memedStakingAddress,
     memedBattle: memedBattleAddress,
     memedEngageToEarn: memedEngageToEarnAddress,
   };
@@ -39,9 +32,6 @@ export default async function (hre: HardhatRuntimeEnvironment) {
   writeFileSync(path.resolve("../backend/src/config/config.json"), JSON.stringify(config, null, 2));
 
   // Set factory address in the previously deployed contracts
-  console.log("Setting factory address in MemedStaking...");
-  await memedStaking.setFactory(config.factory);
-  
   console.log("Setting factory address in MemedBattle...");
   await memedBattle.setFactory(config.factory);
   

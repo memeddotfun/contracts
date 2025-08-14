@@ -124,7 +124,7 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         Battle storage battle = battles[_battleId];
         address memeA = IMemedWarriorNFT(msg.sender).memedToken();
         require(battle.winner == memeA, "Not the winner");
-        UserBattleAllocation memory allocation = battleAllocations[_battleId][_user][memeA];
+        UserBattleAllocation storage allocation = battleAllocations[_battleId][_user][memeA];
         require(allocation.nftsIds.length > 0, "No allocation found");
         require(!allocation.getBack, "Already got back");
         allocation.getBack = true;
