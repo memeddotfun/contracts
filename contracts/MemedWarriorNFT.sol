@@ -7,28 +7,6 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./MemedBattle.sol";
 
-interface IMemedFactory {
-    function getHeat(address token) external view returns (uint256);
-    function owner() external view returns (address);
-    function platformFeePercentage() external view returns (uint256);
-    function feeDenominator() external view returns (uint256);
-    function getByToken(address token) external view returns (
-        address token_addr,
-        address creator,
-        string memory name,
-        string memory ticker,
-        string memory description,
-        string memory image,
-        string memory lensUsername,
-        uint256 createdAt
-    );
-    function swapExactForNativeToken(
-        uint256 _amount,
-        address _token,
-        address _to
-    ) external returns (uint[] memory amounts);
-}
-
 contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
     // Base price and dynamic pricing constants from Memed.md specification
     uint256 public constant BASE_PRICE = 5000 * 1e18; // 5,000 MEME base price

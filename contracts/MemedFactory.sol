@@ -40,13 +40,7 @@ interface IUniswapV2Router02 {
     ) external returns (uint[] memory amounts);
 }
 
-interface IMemedEngageToEarn {
-    function isRewardable(address _token) external view returns (bool);
-    function registerEngagementReward(address _token) external;
-    function getBattleRewardPool(address _token) external view returns (uint256);
-    function transferBattleRewards(address _loser, address _winner, uint256 _amount) external returns (uint256);
-    function claimBattleRewards(address _token, address _winner, uint256 _amount) external;
-}
+
 
 
 contract MemedFactory is Ownable, ReentrancyGuard {
@@ -117,10 +111,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         uint256 createdAt;
     }
 
-    struct HeatUpdate {
-        uint256 id;
-        uint256 heat;
-    }
+
 
     uint256 public id;
     address[] public tokens;
@@ -539,6 +530,16 @@ contract MemedFactory is Ownable, ReentrancyGuard {
     function getHeat(address _token) external view returns (uint256) {
         return fairLaunchData[tokenIdByAddress[_token]].heat;
     }
+
+    function getTokenId(address _token) external view returns (uint256) {
+        return tokenIdByAddress[_token];
+    }
+
+    function getMemedEngageToEarn() external view returns (IMemedEngageToEarn) {
+        return memedEngageToEarn;
+    }
+
+
 
     function getTokens() external view returns (TokenData[] memory) {
         TokenData[] memory result = new TokenData[](tokens.length);

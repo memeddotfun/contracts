@@ -1,4 +1,5 @@
 import "@matterlabs/hardhat-zksync";
+import "@matterlabs/hardhat-zksync-verify";
 
 import "@nomicfoundation/hardhat-chai-matchers";
 import "@nomicfoundation/hardhat-toolbox";
@@ -6,12 +7,12 @@ import "@nomiclabs/hardhat-solhint";
 
 import { HardhatUserConfig } from "hardhat/config";
 
-const config = {
+const config: HardhatUserConfig = {
   solidity: {
     version: "0.8.24",
   },
   zksolc: {
-    version: "1.5.15",
+    version: "1.5.3",
     settings: {},
   },
   networks: {
