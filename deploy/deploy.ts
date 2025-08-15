@@ -18,7 +18,7 @@ export default async function (hre: HardhatRuntimeEnvironment) {
   });
   const memedBattleAddress = await memedBattle.getAddress();
   const memedEngageToEarnAddress = await memedEngageToEarn.getAddress();
-  const factory = await deployContract("MemedFactory_test", [memedBattleAddress, memedEngageToEarnAddress, uniswapV2Router], {
+  const factory = await deployContract("MemedFactory", [memedBattleAddress, memedEngageToEarnAddress, uniswapV2Router], {
     hre,
     wallet,
     verify: true,
