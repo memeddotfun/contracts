@@ -46,10 +46,9 @@ export default async function (hre: HardhatRuntimeEnvironment) {
   const factoryContract = await hre.ethers.getContractAt("MemedFactory", config.factory, wallet);
   
   await factoryContract.completeFairLaunch(id, memedTokenAddress, memedWarriorNFTAddress);
-  await axios.post(`${process.env.BACKEND_URL}/api/webhook/fair-launch/completed/${id}`, {
+  await axios.post(`${process.env.BACKEND_URL}/api/webhook/fair-launch/completed`, {
     id,
-    token: memedTokenAddress,
-    warriorNFT: memedWarriorNFTAddress
+    token: memedTokenAddress
   });
   console.log("Fair launch completed successfully!");
 }

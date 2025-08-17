@@ -278,8 +278,6 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
         
         // Send platform fee to owner
         if (platformFee > 0) {
-            (bool feeSuccess, ) = payable(owner()).call{value: platformFee}("");
-            require(feeSuccess, "Fee transfer failed");
             emit PlatformFeeCollected(_id, msg.sender, platformFee, "buy");
         }
         
