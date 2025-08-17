@@ -28,16 +28,17 @@ contract MemedToken is ERC20, Ownable {
         string memory _name,
         string memory _ticker,
         address _creator,
-        address _engageToEarn
+        address _factoryContract,
+        address _engageToEarnContract
     ) ERC20(_name, _ticker) Ownable() {
-        creatorData.creator = _creator;
+        creatorData.creator = _creator; 
         creatorData.balance = CREATOR_INCENTIVES_ALLOCATION * 70 / 100;
         creatorData.lastRewardAt = block.timestamp;
-        engageToEarnContract = _engageToEarn;
-        factoryContract = msg.sender;
+        factoryContract = _factoryContract;
+        engageToEarnContract = _engageToEarnContract;
         
         // Initial distribution - v2.3 tokenomics (no staking rewards, increased engagement rewards)
-        _mint(_engageToEarn, ENGAGEMENT_REWARDS_ALLOCATION);
+        _mint(engageToEarnContract, ENGAGEMENT_REWARDS_ALLOCATION);
         _mint(_creator, CREATOR_INCENTIVES_ALLOCATION * 30 / 100); // 30% instant to creator
     }
 

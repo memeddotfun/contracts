@@ -13,9 +13,9 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
     uint256 public constant PRICE_INCREMENT = 100 * 1e18; // +100 MEME per 10,000 Heat Score
     uint256 public constant HEAT_THRESHOLD = 10000; // 10,000 Heat Score threshold
     
-    IMemedFactory public factory;
-    MemedBattle public memedBattle;
-    address public memedToken; // The main MEME token address
+    IMemedFactory public immutable factory;
+    MemedBattle public immutable memedBattle;
+    address public immutable memedToken; // The main MEME token address
     
     uint256 public currentTokenId;
 
@@ -57,10 +57,11 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
     
     constructor(
         address _memedToken,
+        address _factory,
         address _memedBattle
     ) ERC721("Memed Warrior", "WARRIOR") {
-        factory = IMemedFactory(msg.sender);
-        memedToken = _memedToken; 
+        memedToken = _memedToken;
+        factory = IMemedFactory(_factory);
         memedBattle = MemedBattle(_memedBattle);
     }
     
