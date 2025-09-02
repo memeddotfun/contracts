@@ -5,8 +5,18 @@ import "@nomicfoundation/hardhat-chai-matchers";
 import "@nomicfoundation/hardhat-toolbox";
 import "@nomiclabs/hardhat-solhint";
 
-import { HardhatUserConfig } from "hardhat/config";
+import { HardhatUserConfig, task } from "hardhat/config";
 
+
+task("deploy-token", "Deploy Memed Token")
+  .addParam("creator", "Token creator")
+  .addParam("name", "Token name")
+  .addParam("ticker", "Token ticker")
+  .addParam("id", "Fair launch ID")
+  .setAction(async (args, hre) => {
+    const { default: deployToken } = await import("./deploy/deploy-token");
+    await deployToken(hre, args.creator, args.name, args.ticker, args.id);
+  });
 const config: HardhatUserConfig = {
   solidity: {
     version: "0.8.24",
