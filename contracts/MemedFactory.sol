@@ -58,7 +58,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
     uint256 public maxWalletCommitment = 500 * 1e18; // 500 native token
     uint256 public maxWalletCommitmentNoSocial = 300 * 1e18; // 300 native token without social proof
     
-    // Platform fee for trading fees, minting fee, and LP fee
+    // Platform fee for trading fees and NFT minting fees
     uint256 public platformFeePercentage = 10; // 1% to platform (10/1000)
     uint256 public feeDenominator = 1000; // For 1% fee calculation
     
@@ -314,16 +314,8 @@ contract MemedFactory is Ownable, ReentrancyGuard {
             fairLaunch.status = FairLaunchStatus.COMPLETED;
             tokens.push(address(memedToken));
             
-            // Calculate fund distribution: 1% platform, 99% LP
-            uint256 platformFee = (fairLaunch.totalCommitted * platformFeePercentage) / feeDenominator;
-            uint256 lpAmount = fairLaunch.totalCommitted - platformFee;
-            
-            // Send platform fee to owner
-            (bool success, ) = payable(owner()).call{value: platformFee}("");
-            require(success, "Transfer failed");
-            
             // Create Uniswap pair and add liquidity
-            _createUniswapLP(_id, address(memedToken), lpAmount);
+            _createUniswapLP(_id, address(memedToken), fairLaunch.totalCommitted);
 
             tokenIdByAddress[address(memedToken)] = _id;
             fairLaunch.status = FairLaunchStatus.COMPLETED;
