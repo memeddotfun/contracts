@@ -109,6 +109,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         mapping(address => uint256) balance;
         uint256 lastEngagementBoost;
         uint256 heat;
+        uint256 lastHeatUpdate;
         uint256 createdAt;
     }
 
@@ -486,7 +487,10 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         for(uint i = 0; i < _heatUpdates.length; i++) {
             TokenData storage token = tokenData[_heatUpdates[i].id];
             FairLaunchData storage fairLaunch = fairLaunchData[_heatUpdates[i].id];
-            fairLaunch.heat += _heatUpdates[i].heat;
+            require(block.timestamp >= fairLaunch.lastHeatUpdate + 1 days, "Heat update too frequent");
+            fairLaunch.lastHeatUpdate = block.timestamp;
+            fairLaunch.lastEngagementBoost = _heatUpdates[i].heat;
+            fairLaunch.heat += _heatUpdates[i].heat - fairLaunch.lastEngagementBoost;
             
             if (fairLaunch.status == FairLaunchStatus.COMPLETED && (fairLaunch.heat - token.lastRewardAt) >= ENGAGEMENT_REWARDS_PER_NEW_HEAT && memedEngageToEarn.isRewardable(token.token)) {
                 memedEngageToEarn.registerEngagementReward(token.token);
@@ -502,7 +506,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
             msg.sender == owner(), 
             "unauthorized"
         );
-        
+
         // Convert calldata to memory for internal processing
         HeatUpdate[] memory heatUpdatesMemory = new HeatUpdate[](_heatUpdates.length);
         for(uint i = 0; i < _heatUpdates.length; i++) {

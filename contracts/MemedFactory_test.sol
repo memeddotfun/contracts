@@ -115,6 +115,7 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
         mapping(address => uint256) balance;
         uint256 lastEngagementBoost;
         uint256 heat;
+        uint256 lastHeatUpdate;
         uint256 createdAt;
     }
 
@@ -304,7 +305,7 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
         emit HasLensVerificationSet(_user, _hasLensVerification);
     }
     
-    function _completeFairLaunch(uint256 _id, address _token, address _warriorNFT) internal {
+    function completeFairLaunch(uint256 _id, address _token, address _warriorNFT) external onlyOwner {
         FairLaunchData storage fairLaunch = fairLaunchData[_id];
         TokenData storage token = tokenData[_id];
         require(fairLaunch.status == FairLaunchStatus.LAUNCHING, "Fair launch not launching");
@@ -470,7 +471,10 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
         for(uint i = 0; i < _heatUpdates.length; i++) {
             TokenData storage token = tokenData[_heatUpdates[i].id];
             FairLaunchData storage fairLaunch = fairLaunchData[_heatUpdates[i].id];
-            fairLaunch.heat += _heatUpdates[i].heat;
+            require(block.timestamp >= fairLaunch.lastHeatUpdate + 1 days, "Heat update too frequent");
+            fairLaunch.lastHeatUpdate = block.timestamp;
+            fairLaunch.lastEngagementBoost = _heatUpdates[i].heat;
+            fairLaunch.heat += _heatUpdates[i].heat - fairLaunch.lastEngagementBoost;
             
             if (fairLaunch.status == FairLaunchStatus.COMPLETED && (fairLaunch.heat - token.lastRewardAt) >= ENGAGEMENT_REWARDS_PER_NEW_HEAT && memedEngageToEarn.isRewardable(token.token)) {
                 memedEngageToEarn.registerEngagementReward(token.token);
