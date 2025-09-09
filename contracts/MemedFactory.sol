@@ -95,7 +95,6 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         uint256 tokenAmount;
         bool claimed;
         bool refunded;
-        bool hasLensVerification;
     }
 
     struct FairLaunchData {
@@ -122,7 +121,6 @@ contract MemedFactory is Ownable, ReentrancyGuard {
     mapping(uint256 => TokenData) public tokenData;
     mapping(address => uint256[]) public tokenIdsByCreator;
     mapping(address => uint256) public tokenIdByAddress;
-    mapping(address => bool) public hasLensVerification;
     mapping(address => uint256) public blockedCreators;
     
     // Events
@@ -148,8 +146,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
     event CommitmentMade(
         uint256 indexed id,
         address indexed user,
-        uint256 amount,
-        bool hasLensVerification
+        uint256 amount
     );
 
     event FairLaunchToBeCompleted(
@@ -209,10 +206,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         uint256 maxWalletCommitmentNoSocial
     );
 
-    event HasLensVerificationSet(
-        address indexed user,
-        bool hasLensVerification
-    );
+
 
     constructor(
         address _memedBattle, 
@@ -233,9 +227,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         string calldata _description,
         string calldata _image
     ) external onlyOwner {
-        require(block.timestamp >= blockedCreators[_creator], "Creator is blocked for 30 days");
-        require(!_tokenExists(), "Already exists");
-        
+        require(isMintable(_creator), "Creator is blocked or already has a token");
         id++;
         TokenData storage token = tokenData[id];
         token.creator = _creator;
@@ -266,9 +258,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         // Calculate platform fee (1%)
         uint256 platformFee = (msg.value * platformFeePercentage) / feeDenominator;
         uint256 ethAfterFee = msg.value - platformFee;
-        
-        uint256 maxCommitment = hasLensVerification[msg.sender] ? maxWalletCommitment : maxWalletCommitmentNoSocial;
-        require(fairLaunch.commitments[msg.sender].amount + msg.value <= maxCommitment, "Exceeds wallet limit");
+
         uint256 tokenAmount = getNativeToTokenAmount(_id, ethAfterFee);
         require(tokenAmount > 0, "Insufficient ETH");
         require(fairLaunch.totalSold + tokenAmount <= INITIAL_SUPPLY, "Exceeds initial supply");
@@ -283,13 +273,12 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         Commitment storage commitment = fairLaunch.commitments[msg.sender];
         commitment.amount += ethAfterFee; // Store amount after fee
         commitment.tokenAmount += tokenAmount;
-        commitment.hasLensVerification = hasLensVerification[msg.sender];
         
         fairLaunch.totalSold += tokenAmount;
         fairLaunch.totalCommitted += ethAfterFee; // Track committed amount after fee
         fairLaunch.balance[msg.sender] += tokenAmount;
         
-        emit CommitmentMade(_id, msg.sender, msg.value, hasLensVerification[msg.sender]);
+        emit CommitmentMade(_id, msg.sender, msg.value);
      
         // Check if we can launch early
         if (fairLaunch.totalCommitted >= minFundingGoal) {
@@ -298,10 +287,6 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         }
     }
 
-    function setHasLensVerification(address _user, bool _hasLensVerification) external onlyOwner {
-        hasLensVerification[_user] = _hasLensVerification;
-        emit HasLensVerificationSet(_user, _hasLensVerification);
-    }
     
     function completeFairLaunch(uint256 _id, address _token, address _warriorNFT) external onlyOwner {
         FairLaunchData storage fairLaunch = fairLaunchData[_id];
@@ -555,8 +540,8 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         return fairLaunch.status == FairLaunchStatus.ACTIVE;
     }
 
-    function _tokenExists() internal view returns (bool) {
-        uint256[] memory tokenIds = tokenIdsByCreator[msg.sender];
+    function _tokenExists(address _creator) internal view returns (bool) {
+        uint256[] memory tokenIds = tokenIdsByCreator[_creator];
         for(uint i = 0; i < tokenIds.length; i++) {
             if(fairLaunchData[tokenIds[i]].status == FairLaunchStatus.COMPLETED || fairLaunchData[tokenIds[i]].status == FairLaunchStatus.ACTIVE) {
                 return true;
@@ -570,12 +555,17 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         return fairLaunchData[_id].commitments[_user];
     }
     
-    function isCreatorBlocked(address _creator) external view returns (bool blocked, uint256 blockExpiresAt) {
+    function isCreatorBlocked(address _creator) public view returns (bool blocked, uint256 blockExpiresAt) {
         blockExpiresAt = blockedCreators[_creator];
         blocked = block.timestamp < blockExpiresAt;
         return (blocked, blockExpiresAt);
     }
     
+    function isMintable(address _creator) public view returns (bool) {
+        (bool blocked, ) = isCreatorBlocked(_creator);
+        return !_tokenExists(_creator) && !blocked;
+    }
+
     function setPlatformFee(uint256 _platformFeePercentage, uint256 _feeDenominator) external onlyOwner {
         platformFeePercentage = _platformFeePercentage;
         feeDenominator = _feeDenominator;
