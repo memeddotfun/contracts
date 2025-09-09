@@ -78,7 +78,6 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         string ticker;
         string description;
         string image;
-        string lensUsername;
         uint256 lastRewardAt;
         uint256 createdAt;
     }
@@ -131,13 +130,11 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         string ticker,
         string description,
         string image,
-        string lensUsername,
         uint256 createdAt
     );
     
     event FairLaunchStarted(
         uint256 indexed id,
-        string indexed lensUsername,
         address indexed creator,
         uint256 startTime,
         uint256 endTime
@@ -221,7 +218,6 @@ contract MemedFactory is Ownable, ReentrancyGuard {
 
     function startFairLaunch(
         address _creator,
-        string calldata _lensUsername,
         string calldata _name,
         string calldata _ticker,
         string calldata _description,
@@ -235,7 +231,6 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         token.ticker = _ticker;
         token.description = _description;
         token.image = _image;
-        token.lensUsername = _lensUsername;
 
         FairLaunchData storage fairLaunch = fairLaunchData[id];
         fairLaunch.status = FairLaunchStatus.ACTIVE;
@@ -244,7 +239,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         fairLaunch.createdAt = block.timestamp;
 
         tokenIdsByCreator[_creator].push(id);
-        emit FairLaunchStarted(id, _lensUsername, _creator, block.timestamp, block.timestamp + FAIR_LAUNCH_DURATION);
+        emit FairLaunchStarted(id, _creator, block.timestamp, block.timestamp + FAIR_LAUNCH_DURATION);
     }
     
     function commitToFairLaunch(
@@ -312,7 +307,6 @@ contract MemedFactory is Ownable, ReentrancyGuard {
                 token.ticker,
                 token.description,
                 token.image,
-                token.lensUsername,
                 block.timestamp
             );
 
@@ -472,7 +466,9 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         for(uint i = 0; i < _heatUpdates.length; i++) {
             TokenData storage token = tokenData[_heatUpdates[i].id];
             FairLaunchData storage fairLaunch = fairLaunchData[_heatUpdates[i].id];
+            require(fairLaunch.createdAt > 0, "Fair launch not created");
             require(block.timestamp >= fairLaunch.lastHeatUpdate + 1 days, "Heat update too frequent");
+            require(fairLaunch.status != FairLaunchStatus.FAILED, "Fair launch failed");
             fairLaunch.lastHeatUpdate = block.timestamp;
             fairLaunch.lastEngagementBoost = _heatUpdates[i].heat;
             fairLaunch.heat += _heatUpdates[i].heat - fairLaunch.lastEngagementBoost;
