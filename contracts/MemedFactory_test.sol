@@ -479,7 +479,7 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
                 token.lastRewardAt = fairLaunch.heat;
             }
 
-            if(fairLaunch.heat - token.creatorIncentivesUnlockedAt >= token.creatorIncentivesUnlocksAt && MemedToken(token.token).isRewardable()) {
+            if(token.isClaimedByCreator && fairLaunch.heat - token.creatorIncentivesUnlockedAt >= token.creatorIncentivesUnlocksAt && MemedToken(token.token).isRewardable()) {
                 token.creatorIncentivesUnlockedAt = fairLaunch.heat;
                 MemedToken(token.token).unlockCreatorIncentives();
             }
