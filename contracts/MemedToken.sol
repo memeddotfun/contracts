@@ -67,6 +67,10 @@ contract MemedToken is ERC20, Ownable {
         emit CreatorIncentivesClaimed(amount);
     }
 
+    function isRewardable() external view returns (bool) {
+        return creatorData.balance > CREATOR_INCENTIVES_ALLOCATION * 2 / 100;
+    }
+
     function claim(address to, uint256 amount) external onlyFactory {
         _mint(to, amount);
     }
