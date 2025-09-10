@@ -24,6 +24,7 @@ interface IMemedFactory {
         address token;
         address warriorNFT;
         address creator;
+        bool isClaimedByCreator;
         string name;
         string ticker;
         string description;
@@ -102,11 +103,13 @@ contract MemedBattle is Ownable, ReentrancyGuard {
     event RewardsDistributed(uint256 battleId, address winner, uint256 totalReward, uint256 participantCount);
     event PlatformFeeTransferred(uint256 battleId, address token, uint256 amount);
 
-    function startBattle(address _memeB) external nonReentrant returns (uint256) {
-
-        IMemedFactory.TokenData memory tokenA = factory.getByToken(msg.sender);
+    function startBattle(address _memeA, address _memeB) external nonReentrant returns (uint256) {
+        IMemedFactory.TokenData memory tokenA = _memeA == address(0) ? factory.getByToken(msg.sender) : factory.getByToken(_memeA);
+        
+        if((_memeA != address(0) && msg.sender != owner()) || (_memeA != address(0) && !tokenA.isClaimedByCreator) || (_memeA == address(0) && msg.sender != tokenA.creator)) {
+            revert("Unauthorized");
+        }
         require(tokenA.token != address(0), "MemeA is not minted");
-        require(tokenA.creator == msg.sender, "You are not the creator");
         require(tokenA.token != _memeB, "Cannot battle yourself");
         
         IMemedFactory.TokenData memory tokenB = factory.getByToken(_memeB);
