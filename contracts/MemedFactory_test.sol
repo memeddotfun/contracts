@@ -61,8 +61,8 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
     uint256 public constant K_BOOST_PER_ENGAGEMENT = 1e9; // 0.000001
     uint256 public constant FAIR_LAUNCH_DURATION = 7 days;
     uint256 public minFundingGoal = 20000 * 1e18; // 20,000 native token
-    uint256 public maxWalletCommitment = 500 * 1e18; // 500 native token
-    uint256 public maxWalletCommitmentNoSocial = 30000 * 1e18; // 30000 native token without social proof
+    uint256 public INITIAL_REWARDS_PER_HEAT = 100000; // 100,000 of heat will be required to unlock the battle rewards
+    uint256 public BATTLE_REWARDS_PERCENTAGE = 20; // 20% of heat will be inceased or decreased based on the battle result
     
     // Platform fee for trading fees and NFT minting fees
     uint256 public platformFeePercentage = 10; // 1% to platform (10/1000)
@@ -85,6 +85,9 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
         string description;
         string image;
         uint256 lastRewardAt;
+        uint256 creatorIncentivesUnlocksAt;
+        uint256 creatorIncentivesUnlockedAt;
+        bool isClaimedByCreator;
         uint256 createdAt;
     }
 
@@ -202,9 +205,14 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
     );
     
     event FairLaunchParamsSet(
-        uint256 minFundingGoal,
-        uint256 maxWalletCommitment,
-        uint256 maxWalletCommitmentNoSocial
+        uint256 minFundingGoal
+    );
+
+    event BattleUpdated(
+        address indexed winner,
+        address indexed loser,
+        uint256 creatorIncentivesUnlocksAtWinner,
+        uint256 creatorIncentivesUnlocksAtLoser
     );
 
     constructor(
@@ -234,7 +242,7 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
         token.ticker = _ticker;
         token.description = _description;
         token.image = _image;
-
+        token.creatorIncentivesUnlocksAt = INITIAL_REWARDS_PER_HEAT;
         FairLaunchData storage fairLaunch = fairLaunchData[id];
         fairLaunch.status = FairLaunchStatus.ACTIVE;
         fairLaunch.fairLaunchStartTime = block.timestamp;
@@ -257,15 +265,14 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
         uint256 platformFee = (ethAmount * platformFeePercentage) / feeDenominator;
         uint256 ethAfterFee = ethAmount - platformFee;
         
-        require(fairLaunch.commitments[msg.sender].amount + ethAmount <= maxWalletCommitment, "Exceeds wallet limit");
-        uint256 tokenAmount = getNativeToTokenAmount(_id, ethAfterFee);
-        require(tokenAmount > 0, "Insufficient ETH");
-        require(fairLaunch.totalSold + tokenAmount <= INITIAL_SUPPLY, "Exceeds initial supply");
-        
         // Send platform fee to owner
         if (platformFee > 0) {
             emit PlatformFeeCollected(_id, msg.sender, platformFee, "buy");
         }
+
+        uint256 tokenAmount = getNativeToTokenAmount(_id, ethAfterFee);
+        require(tokenAmount > 0, "Insufficient ETH");
+        require(fairLaunch.totalSold + tokenAmount <= INITIAL_SUPPLY, "Exceeds initial supply");
         
         Commitment storage commitment = fairLaunch.commitments[msg.sender];
         commitment.amount += ethAfterFee; // Store amount after fee
@@ -284,7 +291,17 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
         }
     }
 
-    
+    function claimToken(uint256 _id, address _creator) external nonReentrant onlyOwner {
+        FairLaunchData storage fairLaunch = fairLaunchData[_id];
+        require(fairLaunch.status == FairLaunchStatus.COMPLETED, "Fair launch not completed");
+        TokenData storage token = tokenData[_id];
+        require(token.creator == _creator, "Creator mismatch");
+        require(!token.isClaimedByCreator, "Already claimed by creator");
+        require(!_tokenExists(_creator), "Creator already has a token");
+        token.isClaimedByCreator = true;
+        MemedToken(token.token).claim(token.creator, INITIAL_SUPPLY * 30 / 100);
+    }
+
     function completeFairLaunch(uint256 _id, address _token, address _warriorNFT) external onlyOwner {
         FairLaunchData storage fairLaunch = fairLaunchData[_id];
         TokenData storage token = tokenData[_id];
@@ -461,6 +478,12 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
                 memedEngageToEarn.registerEngagementReward(token.token);
                 token.lastRewardAt = fairLaunch.heat;
             }
+
+            if(fairLaunch.heat - token.creatorIncentivesUnlockedAt >= token.creatorIncentivesUnlocksAt) {
+                token.creatorIncentivesUnlockedAt = fairLaunch.heat;
+                MemedToken(token.token).unlockCreatorIncentives();
+            }
+
             emit HeatUpdated(_heatUpdates[i].id, fairLaunch.heat, block.timestamp);
         }
     }
@@ -479,6 +502,15 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
         }
         
         _updateHeatInternal(heatUpdatesMemory);
+    }
+
+    function battleUpdate(address _winner, address _loser) external {
+        require(msg.sender == address(memedBattle), "unauthorized");
+        TokenData storage token = tokenData[tokenIdByAddress[_winner]];
+        TokenData storage tokenLoser = tokenData[tokenIdByAddress[_loser]];
+        token.creatorIncentivesUnlocksAt = token.creatorIncentivesUnlocksAt - (token.creatorIncentivesUnlocksAt * BATTLE_REWARDS_PERCENTAGE / 100);
+        tokenLoser.creatorIncentivesUnlocksAt = tokenLoser.creatorIncentivesUnlocksAt + (tokenLoser.creatorIncentivesUnlocksAt * BATTLE_REWARDS_PERCENTAGE / 100);
+        emit BattleUpdated(_winner, _loser, token.creatorIncentivesUnlocksAt, tokenLoser.creatorIncentivesUnlocksAt);
     }
 
     function getByToken(address _token) public view returns (TokenData memory) {
@@ -542,11 +574,9 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
         emit PlatformFeeSet(_platformFeePercentage, _feeDenominator);
     }
 
-    function setFairLaunchParams(uint256 _minFundingGoal, uint256 _maxWalletCommitment, uint256 _maxWalletCommitmentNoSocial) external onlyOwner {
+    function setFairLaunchParams(uint256 _minFundingGoal) external onlyOwner {
         minFundingGoal = _minFundingGoal;
-        maxWalletCommitment = _maxWalletCommitment;
-        maxWalletCommitmentNoSocial = _maxWalletCommitmentNoSocial;
-        emit FairLaunchParamsSet(_minFundingGoal, _maxWalletCommitment, _maxWalletCommitmentNoSocial);
+        emit FairLaunchParamsSet(_minFundingGoal);
     }
     
     // Receive ETH

@@ -43,6 +43,7 @@ interface IMemedFactory {
     function platformFeePercentage() external view returns (uint256);
     function feeDenominator() external view returns (uint256);
     function swapExactForNativeToken(uint256 _amount, address _token, address _to) external returns (uint[] memory amounts);
+    function battleUpdate(address _winner, address _loser) external;
 }
 
 struct HeatUpdate {
@@ -204,7 +205,7 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         heatUpdate[0].id = factory.getTokenId(actualWinner);
         heatUpdate[0].heat = 20000; // Heat boost for winning
         factory.updateHeat(heatUpdate);
-        
+        factory.battleUpdate(actualWinner, actualLoser);
         emit BattleResolved(_battleId, actualWinner, finalScoreA + finalScoreB, valueScoreA + valueScoreB);
     }
 

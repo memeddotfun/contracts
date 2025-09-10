@@ -19,10 +19,13 @@ contract MemedToken is ERC20, Ownable {
     struct CreatorData {
         address creator;
         uint256 balance;
-        uint256 lastRewardAt;
+        uint256 unlockedBalance;
     }
 
     CreatorData public creatorData;
+
+    event CreatorIncentivesUnlocked(uint256 amount);
+    event CreatorIncentivesClaimed(uint256 amount);
     
     constructor(
         string memory _name,
@@ -33,34 +36,42 @@ contract MemedToken is ERC20, Ownable {
     ) ERC20(_name, _ticker) Ownable() {
         creatorData.creator = _creator; 
         creatorData.balance = CREATOR_INCENTIVES_ALLOCATION * 70 / 100;
-        creatorData.lastRewardAt = block.timestamp;
         factoryContract = _factoryContract;
         engageToEarnContract = _engageToEarnContract;
         
-        // Initial distribution - v2.3 tokenomics (no staking rewards, increased engagement rewards)
         _mint(engageToEarnContract, ENGAGEMENT_REWARDS_ALLOCATION);
-        _mint(_creator, CREATOR_INCENTIVES_ALLOCATION * 30 / 100); // 30% instant to creator
+        if(_creator != address(0)) {
+            _mint(_creator, CREATOR_INCENTIVES_ALLOCATION * 30 / 100); // 30% instant to creator
+        }
+    }
+    
+    modifier onlyFactory() {
+        require(msg.sender == factoryContract, "Only factory can call this function");
+        _;
+    }
+    
+    function unlockCreatorIncentives() external onlyFactory {
+        uint256 amount = CREATOR_INCENTIVES_ALLOCATION * 2 / 100;
+        require(creatorData.balance >= amount, "Not enough balance to unlock");
+        creatorData.unlockedBalance += amount;
+        creatorData.balance -= amount;
+        emit CreatorIncentivesUnlocked(amount);
     }
 
     function claimCreatorIncentives() external {
         require(msg.sender == creatorData.creator, "Only creator can claim");
-        require(block.timestamp >= creatorData.lastRewardAt + 30 days, "Not enough time has passed");
-        
-        uint256 amount = CREATOR_INCENTIVES_ALLOCATION * 35 / 100;
-        require(creatorData.balance >= amount, "Not enough balance to claim"); // 35% of creator incentives
-        creatorData.balance -= amount;
-        creatorData.lastRewardAt = block.timestamp;
+        uint256 amount = creatorData.unlockedBalance;
+        creatorData.unlockedBalance = 0;
 
         _mint(creatorData.creator, amount);
+        emit CreatorIncentivesClaimed(amount);
     }
 
-    function claim(address to, uint256 amount) external {
-        require(msg.sender == factoryContract, "Only factory can mint");
+    function claim(address to, uint256 amount) external onlyFactory {
         _mint(to, amount);
     }
     
-    function mintUniswapLP(address to) external {
-        require(msg.sender == factoryContract, "Only factory can mint");
+    function mintUniswapLP(address to) external onlyFactory {
         _mint(to, UNISWAP_LP_ALLOCATION);
     }
 }
