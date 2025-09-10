@@ -12,7 +12,9 @@ contract MemedToken is ERC20, Ownable {
     uint256 public constant ENGAGEMENT_REWARDS_ALLOCATION = (MAX_SUPPLY * 35) / 100; // 350M (35%)
     uint256 public constant CREATOR_INCENTIVES_ALLOCATION = (MAX_SUPPLY * 15) / 100; // 150M (15%)
     uint256 public constant UNISWAP_LP_ALLOCATION = (MAX_SUPPLY * 30) / 100; // 300M (30%)
-    
+    uint256 public constant CREATOR_INITIAL_ALLOCATION = (MAX_SUPPLY * 5) / 100; // 50M (5%)
+    uint256 public constant CREATOR_INITIAL_ALLOCATION_PER_UNLOCK = 2000000 * 1e18; // 2M tokens
+
     address public engageToEarnContract;
     address public factoryContract;
     
@@ -41,7 +43,7 @@ contract MemedToken is ERC20, Ownable {
         
         _mint(engageToEarnContract, ENGAGEMENT_REWARDS_ALLOCATION);
         if(_creator != address(0)) {
-            _mint(_creator, CREATOR_INCENTIVES_ALLOCATION * 30 / 100); // 30% instant to creator
+            _mint(_creator, CREATOR_INITIAL_ALLOCATION);
         }
     }
     
@@ -51,7 +53,7 @@ contract MemedToken is ERC20, Ownable {
     }
     
     function unlockCreatorIncentives() external onlyFactory {
-        uint256 amount = CREATOR_INCENTIVES_ALLOCATION * 2 / 100;
+        uint256 amount = CREATOR_INITIAL_ALLOCATION_PER_UNLOCK;
         require(creatorData.balance >= amount, "Not enough balance to unlock");
         creatorData.unlockedBalance += amount;
         creatorData.balance -= amount;
@@ -68,7 +70,7 @@ contract MemedToken is ERC20, Ownable {
     }
 
     function isRewardable() external view returns (bool) {
-        return creatorData.balance > CREATOR_INCENTIVES_ALLOCATION * 2 / 100;
+        return creatorData.balance > CREATOR_INITIAL_ALLOCATION_PER_UNLOCK;
     }
 
     function claim(address to, uint256 amount) external onlyFactory {

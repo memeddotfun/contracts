@@ -304,7 +304,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         require(!_tokenExists(_creator), "Creator already has a token");
         token.isClaimedByCreator = true;
         token.creatorIncentivesUnlockedAt = fairLaunch.heat;
-        MemedToken(token.token).claim(token.creator, INITIAL_SUPPLY * 30 / 100);
+        MemedToken(token.token).claim(token.creator, INITIAL_SUPPLY * 5 / 100);
     }
 
     
