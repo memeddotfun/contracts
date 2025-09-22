@@ -159,6 +159,9 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
         require(allocation.nftsIds.length > 0, "No allocation found");
         memedBattle.getBackWarrior(_battleId, msg.sender);
         for (uint256 i = 0; i < allocation.nftsIds.length; i++) {
+            if(factory.getMemedEngageToEarn().getUserEngagementReward(msg.sender, memedToken) > 0) {
+                continue;
+            }
             uint256 tokenId = allocation.nftsIds[i];
             _safeMint(msg.sender, tokenId);
             warriors[tokenId].burned = false;
@@ -212,16 +215,6 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
         }
         
         return activeNFTs;
-    }
-    
-    /**
-     * @dev Get reward amount for NFT (20% of mint price as per specification)
-     */
-    function getRewardAmount(uint256 _tokenId) external view returns (uint256) {
-        require(_exists(_tokenId), "NFT does not exist");
-        require(!warriors[_tokenId].burned, "NFT is burned");
-        
-        return (warriors[_tokenId].mintPrice * 20) / 100; // 20% of NFT price
     }
     
     /**

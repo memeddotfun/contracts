@@ -12,16 +12,28 @@ interface IMemedWarriorNFT {
     function getWarriorMintedBeforeByUser(address _user, uint256 _timestamp) external view returns (uint256);
 }
 
+struct TokenBattleAllocation {
+    uint256 winCount;
+    uint256 loseCount;
+}
+
 interface IMemedFactory {
     function getWarriorNFT(address _token) external view returns (address);
     function swap(uint256 _amount, address[] calldata _path, address _to) external returns (uint256[] memory);
+    function getMemedBattle() external view returns (address);
+}
+
+interface IMemedBattle {
+    function tokenBattleAllocations(address _token) external view returns (TokenBattleAllocation memory);
+    function getUserTokenBattleAllocations(uint256 _tokenId, uint256 _until) external view returns (TokenBattleAllocation memory);
+    function tokenAllocations(address _user) external view returns (uint256[] memory);
 }
 
 contract MemedEngageToEarn is Ownable {
     uint256 public constant MAX_REWARD = 350_000_000 * 1e18; // 350M tokens for engagement rewards (v2.3)
     uint256 public constant CYCLE_REWARD_PERCENTAGE = 5; // 5% of engagement rewards per cycle for battles
     uint256 public constant ENGAGEMENT_REWARDS_PER_NFT_PERCENTAGE = 20; // 20% of engagement rewards per nft as per their price
-    
+    uint256 public constant ENGAGEMENT_REWARDS_CHANGE = 100 *1e18; // engagement rewards change per battle
     IMemedFactory public factory;
     uint256 public engagementRewardId;
     
@@ -47,7 +59,9 @@ contract MemedEngageToEarn is Ownable {
         require(msg.sender == address(factory), "Only factory can register engagement rewards");
         uint256 nftPrice = IMemedWarriorNFT(factory.getWarriorNFT(_token)).getCurrentPrice();
         uint256 totalNFTs = IMemedWarriorNFT(factory.getWarriorNFT(_token)).getWarriorMintedBeforeByUser(address(this), block.timestamp);
-        uint256 totalReward = (totalNFTs * nftPrice * ENGAGEMENT_REWARDS_PER_NFT_PERCENTAGE) / 100;
+        TokenBattleAllocation memory tokenBattleAllocation = IMemedBattle(factory.getMemedBattle()).tokenBattleAllocations(_token);
+        uint256 change = (ENGAGEMENT_REWARDS_CHANGE * tokenBattleAllocation.winCount) - (ENGAGEMENT_REWARDS_CHANGE * tokenBattleAllocation.loseCount);
+        uint256 totalReward =   ((totalNFTs * nftPrice * ENGAGEMENT_REWARDS_PER_NFT_PERCENTAGE) / 100) + change;
         require(totalReward > 0, "No reward");
         require(totalClaimed[_token] + totalReward <= MAX_REWARD, "Max reward reached");
         totalClaimed[_token] += totalReward;
@@ -60,7 +74,13 @@ contract MemedEngageToEarn is Ownable {
         require(!isClaimedByUser[_rewardId][msg.sender], "Already claimed");
         EngagementReward memory reward = engagementRewards[_rewardId];
         uint256 nftCount = IMemedWarriorNFT(factory.getWarriorNFT(reward.token)).getWarriorMintedBeforeByUser(msg.sender, reward.timestamp);
-        uint256 amount = ((reward.nftPrice * nftCount) * ENGAGEMENT_REWARDS_PER_NFT_PERCENTAGE) / 100;
+        uint256[] memory tokenAllocations = IMemedBattle(factory.getMemedBattle()).tokenAllocations(msg.sender);
+        uint256 change = 0;
+        for (uint256 i = 0; i < tokenAllocations.length; i++) {
+            TokenBattleAllocation memory tokenBattleAllocation = IMemedBattle(factory.getMemedBattle()).getUserTokenBattleAllocations(tokenAllocations[i], reward.timestamp);
+            change += (ENGAGEMENT_REWARDS_CHANGE * tokenBattleAllocation.winCount) - (ENGAGEMENT_REWARDS_CHANGE * tokenBattleAllocation.loseCount);
+        }
+        uint256 amount = (((reward.nftPrice * nftCount) * ENGAGEMENT_REWARDS_PER_NFT_PERCENTAGE) / 100) + change;
         IERC20(reward.token).transfer(msg.sender, amount);
         isClaimedByUser[_rewardId][msg.sender] = true;
         engagementRewards[_rewardId].amountClaimed += amount;
@@ -73,6 +93,17 @@ contract MemedEngageToEarn is Ownable {
     function getBattleRewardPool(address _token) external view returns (uint256) {
         uint256 balance = IERC20(_token).balanceOf(address(this));
         return (balance * CYCLE_REWARD_PERCENTAGE) / 100;
+    }
+
+    function getUserEngagementReward(address _user, address _token) external view returns (uint256) {
+        uint256 nftPrice = IMemedWarriorNFT(factory.getWarriorNFT(_token)).getCurrentPrice();
+        uint256[] memory tokenAllocations = IMemedBattle(factory.getMemedBattle()).tokenAllocations(_user);
+        uint256 change = 0;
+        for (uint256 i = 0; i < tokenAllocations.length; i++) {
+            TokenBattleAllocation memory tokenBattleAllocation = IMemedBattle(factory.getMemedBattle()).getUserTokenBattleAllocations(tokenAllocations[i], block.timestamp);
+            change += (ENGAGEMENT_REWARDS_CHANGE * tokenBattleAllocation.winCount) - (ENGAGEMENT_REWARDS_CHANGE * tokenBattleAllocation.loseCount);
+        }
+        return ((nftPrice * ENGAGEMENT_REWARDS_PER_NFT_PERCENTAGE) / 100) + change;
     }
     
     /**

@@ -557,6 +557,14 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
     function getUserCommitment(uint256 _id, address _user) external view returns (Commitment memory) {
         return fairLaunchData[_id].commitments[_user];
     }
+
+    function getMemedBattle() external view returns (address) {
+        return address(memedBattle);
+    }
+
+    function getMemedEngageToEarn() external view returns (IMemedEngageToEarn_test) {
+        return memedEngageToEarn;
+    }
     
     function isCreatorBlocked(address _creator) public view returns (bool blocked, uint256 blockExpiresAt) {
         blockExpiresAt = blockedCreators[_creator];

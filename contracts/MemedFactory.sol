@@ -557,6 +557,10 @@ contract MemedFactory is Ownable, ReentrancyGuard {
     function getMemedEngageToEarn() external view returns (IMemedEngageToEarn) {
         return memedEngageToEarn;
     }
+    
+    function getMemedBattle() external view returns (address) {
+        return address(memedBattle);
+    }
 
 
 

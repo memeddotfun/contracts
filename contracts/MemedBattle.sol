@@ -12,6 +12,7 @@ interface IMemedWarriorNFT {
 }
 
 interface IMemedEngageToEarn {
+    function getUserEngagementReward(address _user, address _token) external view returns (uint256);
     function isRewardable(address _token) external view returns (bool);
     function registerEngagementReward(address _token) external;
     function getBattleRewardPool(address _token) external view returns (uint256);
@@ -86,6 +87,14 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         bool getBack;
     }
 
+    struct TokenBattleAllocation {
+        uint256 winCount;
+        uint256 loseCount;
+    }
+    struct UserNftBattleAllocation {
+        address supportedMeme;
+        uint256 battleId;
+    }
     uint256 public battleDuration = 1 days;
     uint256 public battleCount;
     mapping(uint256 => Battle) public battles;
@@ -93,6 +102,9 @@ contract MemedBattle is Ownable, ReentrancyGuard {
     mapping(uint256 => mapping(address => mapping(address => UserBattleAllocation))) public battleAllocations;
     mapping(address => uint256[]) public userBattles;
     mapping(uint256 => mapping(address => uint256)) public userAllocationIndex;
+    mapping(uint256 => UserNftBattleAllocation[]) public nftBattleAllocations;
+    mapping(address => TokenBattleAllocation) public tokenBattleAllocations;
+    mapping(address => uint256[]) public tokenAllocations;
 
     event BattleStarted(uint256 battleId, address memeA, address memeB, address creatorA, address creatorB);
     event BattleResolved(uint256 battleId, address winner, uint256 engagementScore, uint256 valueScore);
@@ -148,16 +160,30 @@ contract MemedBattle is Ownable, ReentrancyGuard {
             allocation.getBack = false;
             for (uint256 i = 0; i < _nftsIds.length; i++) {
                 allocation.nftsIds.push(_nftsIds[i]);
+               nftBattleAllocations[_nftsIds[i]].push(UserNftBattleAllocation(_supportedMeme, _battleId));
             }
         }else{
             for (uint256 i = 0; i < _nftsIds.length; i++) {
                 allocation.nftsIds.push(_nftsIds[i]);
+                nftBattleAllocations[_nftsIds[i]].push(UserNftBattleAllocation(_supportedMeme, _battleId));
             }
         }
         if(_supportedMeme == battle.memeA) {
             battle.memeANftsAllocated += _nftsIds.length;
         }else{
             battle.memeBNftsAllocated += _nftsIds.length;
+        }
+        for (uint256 i = 0; i < _nftsIds.length; i++) {
+            bool found = false;
+            for (uint256 j = 0; j < tokenAllocations[_user].length; j++) {
+                if(tokenAllocations[_user][j] == _nftsIds[i]) {
+                    found = true;
+                    break;
+                }
+            }
+        if(!found) {
+            tokenAllocations[_user].push(_nftsIds[i]);
+        }
         }
         emit UserAllocated(_battleId, msg.sender, _supportedMeme, _nftsIds);
     }
@@ -194,6 +220,8 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         address actualLoser = actualWinner == battle.memeA ? battle.memeB : battle.memeA;
         battle.winner = actualWinner;
         battle.resolved = true;
+        tokenBattleAllocations[actualWinner].winCount+= actualWinner == battle.memeA ? battle.memeANftsAllocated : battle.memeBNftsAllocated;
+        tokenBattleAllocations[actualLoser].loseCount+= actualLoser == battle.memeA ? battle.memeANftsAllocated : battle.memeBNftsAllocated;
         
         
         // Winner receives 5% of engagement rewards pool (swapped to winner's token)
@@ -210,6 +238,17 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         factory.updateHeat(heatUpdate);
         factory.battleUpdate(actualWinner, actualLoser);
         emit BattleResolved(_battleId, actualWinner, finalScoreA + finalScoreB, valueScoreA + valueScoreB);
+    }
+
+    function getUserTokenBattleAllocations(uint256 _tokenId, uint256 _until) external view returns (TokenBattleAllocation memory) {
+        TokenBattleAllocation memory allocation;
+        for (uint256 i = 0; i < nftBattleAllocations[_tokenId].length; i++) {
+            Battle storage battle = battles[nftBattleAllocations[_tokenId][i].battleId];
+            if(battle.resolved && battle.endTime <= _until) {
+                battle.winner == nftBattleAllocations[_tokenId][i].supportedMeme ? allocation.winCount++ : allocation.loseCount++;
+            }
+        }
+        return allocation;
     }
 
     function claimRewards(uint256 _battleId) external {
