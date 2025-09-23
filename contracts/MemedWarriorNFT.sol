@@ -25,7 +25,7 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
         address owner;
         uint256 mintPrice;
         uint256 mintedAt;
-        bool burned;
+        bool allocated;
     }
     
     mapping(uint256 => WarriorData) public warriors;
@@ -37,7 +37,7 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
         uint256 price
     );
 
-    event WarriorBurned(
+    event WarriorAllocated(
         uint256 indexed tokenId, 
         address indexed owner
     );
@@ -123,7 +123,7 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
             owner: msg.sender,
             mintPrice: price,
             mintedAt: block.timestamp,
-            burned: false
+            allocated: false
         });
         
         userNFTs[msg.sender].push(tokenId);
@@ -134,19 +134,17 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
     }
     
     /**
-     * @dev Burn NFT (called by user when they want to allocate NFTs to a battle)
+     * @dev Allocate NFT (called by user when they want to allocate NFTs to a battle)
      */
-    function _burnWarrior(uint256 _tokenId) internal {
+    function _allocateWarrior(uint256 _tokenId) internal {
         require(_exists(_tokenId), "NFT does not exist");
-        require(!warriors[_tokenId].burned, "NFT already burned");
+        require(!warriors[_tokenId].allocated, "NFT already allocated");
         
         address owner = ownerOf(_tokenId);
-        warriors[_tokenId].burned = true;
+        warriors[_tokenId].allocated = true;
         
-        // Burn the NFT
-        _burn(_tokenId);
         
-        emit WarriorBurned(_tokenId, owner);
+        emit WarriorAllocated(_tokenId, owner);
     }
 
     /** Get back the warrior NFTs to the user if they win the battle
@@ -162,16 +160,13 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
             if(factory.getMemedEngageToEarn().getUserEngagementReward(msg.sender, memedToken) > 0) {
                 continue;
             }
-            uint256 tokenId = allocation.nftsIds[i];
-            _safeMint(msg.sender, tokenId);
-            warriors[tokenId].burned = false;
-            emit WarriorGetBack(tokenId, msg.sender);
+            warriors[allocation.nftsIds[i]].allocated = false;
         }
     }
 
     function allocateNFTsToBattle(uint256 _battleId, address _user, address _supportedMeme, uint256[] calldata _nftsIds) external {
         for (uint256 i = 0; i < _nftsIds.length; i++) {
-            _burnWarrior(_nftsIds[i]);
+            _allocateWarrior(_nftsIds[i]);
         }
         memedBattle.allocateNFTsToBattle(_battleId, _user, _supportedMeme, _nftsIds);
     }
@@ -182,7 +177,7 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
     function hasActiveWarrior(address _user) external view returns (bool) {
         uint256[] memory nfts = userNFTs[_user];
         for (uint256 i = 0; i < nfts.length; i++) {
-            if (_exists(nfts[i]) && !warriors[nfts[i]].burned) {
+            if (_exists(nfts[i])) {
                 return true;
             }
         }
@@ -198,7 +193,7 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
         
         // Count active NFTs
         for (uint256 i = 0; i < userTokens.length; i++) {
-            if (_exists(userTokens[i]) && !warriors[userTokens[i]].burned) {
+            if (_exists(userTokens[i])) {
                 activeCount++;
             }
         }
@@ -208,7 +203,7 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
         uint256 index = 0;
         
         for (uint256 i = 0; i < userTokens.length; i++) {
-            if (_exists(userTokens[i]) && !warriors[userTokens[i]].burned) {
+            if (_exists(userTokens[i])) {
                 activeNFTs[index] = userTokens[i];
                 index++;
             }
@@ -218,7 +213,7 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
     }
     
     /**
-     * @dev Burn MEME tokens (send to zero address)
+    * @dev Burn MEME tokens (send to zero address)
      */
     function _burnTokens(uint256 _amount) internal {
         // Transfer to zero address = burn
