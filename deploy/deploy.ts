@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { deployContract, getWallet } from "./utils";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 import path from "node:path";
@@ -18,7 +18,7 @@ export default async function (hre: HardhatRuntimeEnvironment) {
   });
   const memedBattleAddress = await memedBattle.getAddress();
   const memedEngageToEarnAddress = await memedEngageToEarn.getAddress();
-  const factory = await deployContract("MemedFactory_test", [memedBattleAddress, memedEngageToEarnAddress, uniswapV2Router], {
+  const factory = await deployContract("MemedFactory", [memedBattleAddress, memedEngageToEarnAddress, uniswapV2Router], {
     hre,
     wallet,
     verify: true,

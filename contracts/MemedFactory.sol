@@ -54,7 +54,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
     uint256 public constant INITIAL_K = 1e11; // 0.00001
     uint256 public constant K_BOOST_PER_ENGAGEMENT = 1e9; // 0.000001
     uint256 public constant FAIR_LAUNCH_DURATION = 7 days;
-    uint256 public minFundingGoal = 20000 * 1e18; // 20,000 native token
+    uint256 public minFundingGoal = 10 * 1e18; // 10 native token
     uint256 public INITIAL_REWARDS_PER_HEAT = 100000; // 100,000 of heat will be required to unlock the battle rewards
     uint256 public BATTLE_REWARDS_PERCENTAGE = 20; // 20% of heat will be inceased or decreased based on the battle result
     
