@@ -11,7 +11,6 @@ contract MemedToken is ERC20, Ownable {
     uint256 public constant FAIR_LAUNCH_ALLOCATION = (MAX_SUPPLY * 20) / 100; // 200M (20%)
     uint256 public constant ENGAGEMENT_REWARDS_ALLOCATION = (MAX_SUPPLY * 35) / 100; // 350M (35%)
     uint256 public constant CREATOR_INCENTIVES_ALLOCATION = (MAX_SUPPLY * 15) / 100; // 150M (15%)
-    uint256 public constant UNISWAP_LP_ALLOCATION = (MAX_SUPPLY * 30) / 100; // 300M (30%)
     uint256 public constant CREATOR_INITIAL_ALLOCATION = (MAX_SUPPLY * 5) / 100; // 50M (5%)
     uint256 public constant CREATOR_INITIAL_ALLOCATION_PER_UNLOCK = 2000000 * 1e18; // 2M tokens
 
@@ -77,7 +76,7 @@ contract MemedToken is ERC20, Ownable {
         _mint(to, amount);
     }
     
-    function mintUniswapLP(address to) external onlyFactory {
-        _mint(to, UNISWAP_LP_ALLOCATION);
+    function mintUniswapLP(address to, uint256 amount) external onlyFactory {
+        _mint(to, amount);
     }
 }
