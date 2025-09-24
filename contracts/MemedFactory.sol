@@ -52,13 +52,13 @@ contract MemedFactory is Ownable, ReentrancyGuard {
     uint256 public constant MAX_ENGAGE_CREATOR_REWARD_PERCENTAGE = 1;
 
     // Bonding curve parameters
-    uint256 public constant FAIR_LAUNCH_DURATION = 7 days;
+    uint256 public constant FAIR_LAUNCH_DURATION = 30 days;
     uint256 public INITIAL_SUPPLY = 1000000000 * 1e18; // 1B token
     uint256 public constant DECIMALS = 1e18;
     uint256 public constant TOTAL_FOR_SALE = 200_000_000 * DECIMALS;
-    uint256 public constant TARGET_ETH_WEI = 10 ether;
+    uint256 public constant TARGET_ETH_WEI = 40 ether;
     uint256 public constant SCALE = 1e36;
-    uint256 public constant SLOPE = 500;
+    uint256 public constant SLOPE = 2000;
 
     // Battle rewards
     uint256 public INITIAL_REWARDS_PER_HEAT = 100000; // 100,000 of heat will be required to unlock the battle rewards

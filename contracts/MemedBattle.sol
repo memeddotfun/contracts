@@ -62,7 +62,14 @@ contract MemedBattle is Ownable, ReentrancyGuard {
     uint256 public constant ENGAGEMENT_WEIGHT = 60; // 60% engagement, 40% value
     uint256 public constant VALUE_WEIGHT = 40;
     uint256 public constant BATTLE_REWARD_PERCENTAGE = 5; // 5% of engagement rewards pool per cycle
-    
+
+
+    enum BattleStatus {
+        NOT_STARTED,
+        CHALLENGED,
+        STARTED,
+        RESOLVED
+    }
     struct Battle {
         uint256 battleId;
         address memeA;
@@ -73,7 +80,7 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         uint256 heatB;
         uint256 startTime;
         uint256 endTime;
-        bool resolved;
+        BattleStatus status;
         address winner;
         uint256 totalReward;
     }
@@ -106,7 +113,8 @@ contract MemedBattle is Ownable, ReentrancyGuard {
     mapping(address => TokenBattleAllocation) public tokenBattleAllocations;
     mapping(address => uint256[]) public tokenAllocations;
 
-    event BattleStarted(uint256 battleId, address memeA, address memeB, address creatorA, address creatorB);
+    event BattleChallenged(uint256 battleId, address memeA, address memeB);
+    event BattleStarted(uint256 battleId, address memeA, address memeB);
     event BattleResolved(uint256 battleId, address winner, uint256 engagementScore, uint256 valueScore);
     event UserAllocated(uint256 battleId, address user, address meme, uint256[] nftsIds);
     event BattleRewardsClaimed(uint256 battleId, address user, uint256 amount);
@@ -115,14 +123,11 @@ contract MemedBattle is Ownable, ReentrancyGuard {
     event RewardsDistributed(uint256 battleId, address winner, uint256 totalReward, uint256 participantCount);
     event PlatformFeeTransferred(uint256 battleId, address token, uint256 amount);
 
-    function startBattle(address _memeA, address _memeB) external nonReentrant returns (uint256) {
-        IMemedFactory.TokenData memory tokenA = _memeA == address(0) ? factory.getByToken(msg.sender) : factory.getByToken(_memeA);
-        
-        if((_memeA != address(0) && msg.sender != owner()) || (_memeA != address(0) && !tokenA.isClaimedByCreator) || (_memeA == address(0) && msg.sender != tokenA.creator)) {
-            revert("Unauthorized");
-        }
+    function challengeBattle(address _memeA, address _memeB) external nonReentrant {
+        IMemedFactory.TokenData memory tokenA = factory.getByToken(_memeA);
         require(tokenA.token != address(0), "MemeA is not minted");
         require(tokenA.token != _memeB, "Cannot battle yourself");
+        require(tokenA.creator == msg.sender || (msg.sender != owner() && tokenA.isClaimedByCreator), "Unauthorized");
         
         IMemedFactory.TokenData memory tokenB = factory.getByToken(_memeB);
         require(tokenB.token != address(0), "MemeB is not minted");
@@ -133,21 +138,40 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         b.memeB = tokenB.token;
         b.heatA = factory.getHeat(tokenA.token);
         b.heatB = factory.getHeat(tokenB.token);
-        b.startTime = block.timestamp;
-        b.endTime = block.timestamp + battleDuration;
-        b.resolved = false;
         battleIds[tokenA.token].push(battleCount);
         battleIds[tokenB.token].push(battleCount);
+        if(!tokenB.isClaimedByCreator) {
+            _startBattle(b.battleId);
+    }else{
+        b.status = BattleStatus.CHALLENGED;
+        emit BattleChallenged(battleCount, tokenA.token, tokenB.token);
+    }
 
-        emit BattleStarted(battleCount, tokenA.token, tokenB.token, msg.sender, tokenB.creator);
-        return battleCount++;
+        battleCount++;
+    }
+
+    function acceptBattle(uint256 _battleId) external nonReentrant {
+        Battle storage battle = battles[_battleId];
+        require(battle.status == BattleStatus.CHALLENGED, "Battle not challenged");
+        IMemedFactory.TokenData memory tokenB = factory.getByToken(battle.memeB);
+        require(tokenB.token != address(0), "MemeB is not minted");
+        require(tokenB.creator == msg.sender, "Unauthorized");
+        _startBattle(_battleId);
+    }
+
+    function _startBattle(uint256 _battleId) internal {
+        Battle storage battle = battles[_battleId];
+        battle.status = BattleStatus.STARTED;
+        battle.startTime = block.timestamp;
+        battle.endTime = block.timestamp + battleDuration;
+        emit BattleStarted(_battleId, battle.memeA, battle.memeB);
     }
     
     function allocateNFTsToBattle(uint256 _battleId, address _user, address _supportedMeme, uint256[] calldata _nftsIds) public nonReentrant {
         Battle storage battle = battles[_battleId];
         require(battle.memeA != address(0) && battle.memeB != address(0), "Invalid battle");
         require(block.timestamp < battle.endTime, "Battle ended");
-        require(!battle.resolved, "Battle resolved");
+        require(battle.status == BattleStatus.STARTED, "Battle not started");
         require(_supportedMeme == battle.memeA || _supportedMeme == battle.memeB, "Invalid meme");
         address nftWarrior = factory.getWarriorNFT(_supportedMeme);
         require(nftWarrior == msg.sender, "Unauthorized");
@@ -202,7 +226,7 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         Battle storage battle = battles[_battleId];
         require(battle.memeA != address(0) && battle.memeB != address(0), "Invalid battle");
         require(block.timestamp >= battle.endTime, "Battle not ended");
-        require(!battle.resolved, "Already resolved");
+        require(battle.status == BattleStatus.STARTED, "Battle not started");
         require(msg.sender == address(factory) || msg.sender == owner(), "Unauthorized");
         
         // Get engagement scores (heat) from factory
@@ -219,7 +243,7 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         address actualWinner = finalScoreA >= finalScoreB ? battle.memeA : battle.memeB;
         address actualLoser = actualWinner == battle.memeA ? battle.memeB : battle.memeA;
         battle.winner = actualWinner;
-        battle.resolved = true;
+        battle.status = BattleStatus.RESOLVED;
         tokenBattleAllocations[actualWinner].winCount+= actualWinner == battle.memeA ? battle.memeANftsAllocated : battle.memeBNftsAllocated;
         tokenBattleAllocations[actualLoser].loseCount+= actualLoser == battle.memeA ? battle.memeANftsAllocated : battle.memeBNftsAllocated;
         
@@ -244,7 +268,7 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         TokenBattleAllocation memory allocation;
         for (uint256 i = 0; i < nftBattleAllocations[_tokenId].length; i++) {
             Battle storage battle = battles[nftBattleAllocations[_tokenId][i].battleId];
-            if(battle.resolved && battle.endTime <= _until) {
+            if(battle.status == BattleStatus.RESOLVED && battle.endTime <= _until) {
                 battle.winner == nftBattleAllocations[_tokenId][i].supportedMeme ? allocation.winCount++ : allocation.loseCount++;
             }
         }
@@ -253,7 +277,7 @@ contract MemedBattle is Ownable, ReentrancyGuard {
 
     function claimRewards(uint256 _battleId) external {
         Battle storage battle = battles[_battleId];
-        require(battle.resolved, "Battle not resolved");
+        require(battle.status == BattleStatus.RESOLVED, "Battle not resolved");
         uint256 reward = battle.totalReward * battleAllocations[_battleId][msg.sender][battle.winner].nftsIds.length / (battle.winner == battle.memeA ? battle.memeANftsAllocated : battle.memeBNftsAllocated);
         require(reward > 0, "No reward to claim");
         factory.getMemedEngageToEarn().claimBattleRewards(battle.memeA, msg.sender, reward);
@@ -301,7 +325,7 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         uint256[] memory battleIdsArray = battleIds[_token];
         for (uint256 i = 0; i < battleIdsArray.length; i++) {
             Battle storage battle = battles[battleIdsArray[i]];
-            if (battle.resolved && battle.winner == _token && !battleAllocations[battle.battleId][_user][_token].claimed) {
+            if (battle.status == BattleStatus.RESOLVED && battle.winner == _token && !battleAllocations[battle.battleId][_user][_token].claimed) {
                 userReward += battle.totalReward * battleAllocations[battle.battleId][_user][_token].nftsIds.length / (battle.winner == battle.memeA ? battle.memeANftsAllocated : battle.memeBNftsAllocated);
             }
         }
@@ -310,7 +334,7 @@ contract MemedBattle is Ownable, ReentrancyGuard {
     
     function getUserClaimableReward(uint256 _battleId, address _user) external view returns (uint256) {
         Battle storage battle = battles[_battleId];
-        require(battle.resolved, "Battle not resolved");
+        require(battle.status == BattleStatus.RESOLVED, "Battle not resolved");
         require(battle.winner == battle.memeA || battle.winner == battle.memeB, "Not the winner");
         require(!battleAllocations[_battleId][_user][battle.winner].claimed, "Already claimed");
         return battle.totalReward * battleAllocations[_battleId][_user][battle.winner].nftsIds.length / (battle.winner == battle.memeA ? battle.memeANftsAllocated : battle.memeBNftsAllocated);
