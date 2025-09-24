@@ -62,7 +62,7 @@ contract MemedBattle is Ownable, ReentrancyGuard {
     uint256 public constant ENGAGEMENT_WEIGHT = 60; // 60% engagement, 40% value
     uint256 public constant VALUE_WEIGHT = 40;
     uint256 public constant BATTLE_REWARD_PERCENTAGE = 5; // 5% of engagement rewards pool per cycle
-
+    uint256 public constant BATTLE_COOLDOWN = 14 days;
 
     enum BattleStatus {
         NOT_STARTED,
@@ -102,6 +102,13 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         address supportedMeme;
         uint256 battleId;
     }
+
+    struct BattleCooldown {
+        bool onBattle;
+        uint256 cooldownEndTime;
+    }
+
+    mapping(address => BattleCooldown) public battleCooldowns;
     uint256 public battleDuration = 1 days;
     uint256 public battleCount;
     mapping(uint256 => Battle) public battles;
@@ -128,10 +135,10 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         require(tokenA.token != address(0), "MemeA is not minted");
         require(tokenA.token != _memeB, "Cannot battle yourself");
         require(tokenA.creator == msg.sender || (msg.sender != owner() && tokenA.isClaimedByCreator), "Unauthorized");
-        
+        require(!battleCooldowns[tokenA.token].onBattle || block.timestamp > battleCooldowns[tokenA.token].cooldownEndTime, "MemeA is on battle or cooldown");
         IMemedFactory.TokenData memory tokenB = factory.getByToken(_memeB);
         require(tokenB.token != address(0), "MemeB is not minted");
-        
+        require(!battleCooldowns[tokenB.token].onBattle || block.timestamp > battleCooldowns[tokenB.token].cooldownEndTime, "MemeB is on battle or cooldown");
         Battle storage b = battles[battleCount];
         b.battleId = battleCount;
         b.memeA = tokenA.token;
@@ -164,6 +171,10 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         battle.status = BattleStatus.STARTED;
         battle.startTime = block.timestamp;
         battle.endTime = block.timestamp + battleDuration;
+        battleCooldowns[battle.memeA].onBattle = true;
+        battleCooldowns[battle.memeB].onBattle = true;
+        battleCooldowns[battle.memeA].cooldownEndTime = block.timestamp + BATTLE_COOLDOWN;
+        battleCooldowns[battle.memeB].cooldownEndTime = block.timestamp + BATTLE_COOLDOWN;
         emit BattleStarted(_battleId, battle.memeA, battle.memeB);
     }
     
@@ -246,6 +257,8 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         battle.status = BattleStatus.RESOLVED;
         tokenBattleAllocations[actualWinner].winCount+= actualWinner == battle.memeA ? battle.memeANftsAllocated : battle.memeBNftsAllocated;
         tokenBattleAllocations[actualLoser].loseCount+= actualLoser == battle.memeA ? battle.memeANftsAllocated : battle.memeBNftsAllocated;
+        battleCooldowns[actualWinner].onBattle = false;
+        battleCooldowns[actualLoser].onBattle = false;
         
         
         // Winner receives 5% of engagement rewards pool (swapped to winner's token)
