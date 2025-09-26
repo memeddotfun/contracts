@@ -1,47 +1,50 @@
-import "@matterlabs/hardhat-zksync";
-import "@matterlabs/hardhat-zksync-verify";
+import type { HardhatUserConfig } from "hardhat/config";
 
-import "@nomicfoundation/hardhat-chai-matchers";
-import "@nomicfoundation/hardhat-toolbox";
-import "@nomiclabs/hardhat-solhint";
-
-import { HardhatUserConfig, task } from "hardhat/config";
+import hardhatToolboxViemPlugin from "@nomicfoundation/hardhat-toolbox-viem";
+import { configVariable } from "hardhat/config";
 
 
-task("deploy-token", "Deploy Memed Token")
-  .addParam("creator", "Token creator")
-  .addParam("name", "Token name")
-  .addParam("ticker", "Token ticker")
-  .addParam("id", "Fair launch ID")
-  .setAction(async (args, hre) => {
-    const { default: deployToken } = await import("./deploy/deploy-token");
-    await deployToken(hre, args.creator, args.name, args.ticker, args.id);
-  });
+const WALLET_KEY = configVariable("WALLET_KEY");
+const ALCHEMY_API_KEY = configVariable("ALCHEMY_API_KEY");
+const ETHERSCAN_API_KEY = configVariable("ETHERSCAN_API_KEY");
+
+
 const config: HardhatUserConfig = {
+  plugins: [hardhatToolboxViemPlugin],
   solidity: {
-    version: "0.8.24",
-  },
-  zksolc: {
-    version: "1.5.3",
-    settings: {},
+    profiles: {
+      default: {
+        version: "0.8.24",
+      },
+      production: {
+        version: "0.8.24",
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 200,
+          },
+        },
+      },
+    },
   },
   networks: {
-    lensTestnet: {
-      chainId: 37111,
-      url: "https://api.staging.lens.zksync.dev",
-      verifyURL:
-        "https://api-explorer-verify.staging.lens.zksync.dev/contract_verification",
-      zksync: true,
-      ethNetwork: "sepolia",
+    base: {
+      type: "http",
+      url: `https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
+      accounts: [WALLET_KEY || ""],
+      chainId: 8453,
     },
-    hardhat: {
-      loggingEnabled: true,
-      zksync: true,
+    baseSepolia: {
+      type: "http",
+      url: `https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
+      accounts: [WALLET_KEY || ""],
+      chainId: 84532,
     },
-    mainnet: {
-      chainId: 232,
-      url: "https://rpc.lens.xyz",
-    },
+  },
+  verify: {
+  etherscan: {
+    apiKey: ETHERSCAN_API_KEY,
+  },
   },
 };
 

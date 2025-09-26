@@ -1,42 +1,20 @@
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/sdks
-!.yarn/versions
+# Node modules
+/node_modules
 
-# Swap the comments on the following lines if you wish to use zero-installs
-# In that case, don't forget to run `yarn config set enableGlobalCache false`!
-# Documentation here: https://yarnpkg.com/features/caching#zero-installs
+# Compilation output
+/dist
 
-#!.yarn/cache
-.pnp.*
+# pnpm deploy output
+/bundle
 
-node_modules
-.env
-
-# Hardhat files
-/cache
+# Hardhat Build Artifacts
 /artifacts
-/cache-zk
-/artifacts-zk
-/deployments-zk
 
-# TypeChain files
-/typechain
-/typechain-types
+# Hardhat compilation (v2) support directory
+/cache
 
-# solidity-coverage files
+# Typechain output
+/types
+
+# Hardhat coverage reports
 /coverage
-/coverage.json
-
-# Hardhat Ignition default folder for deployments against a local node
-ignition/deployments/chain-31337
-
-# ZKSync files
-era_test_node.log
-.upgradable/zkSync-era-test-node.json
-
-# misc
-.DS_Store
-*.pem

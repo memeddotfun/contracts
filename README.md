@@ -1,118 +1,57 @@
-# Lens Network Hardhat Boilerplate
+# Sample Hardhat 3 Beta Project (`node:test` and `viem`)
 
-This repository contains a boilerplate for developing smart contracts on the Lens Network using [Hardhat](https://hardhat.org/).
+This project showcases a Hardhat 3 Beta project using the native Node.js test runner (`node:test`) and the `viem` library for Ethereum interactions.
 
-## Table of Contents <!-- omit in toc -->
+To learn more about the Hardhat 3 Beta, please visit the [Getting Started guide](https://hardhat.org/docs/getting-started#getting-started-with-hardhat-3). To share your feedback, join our [Hardhat 3 Beta](https://hardhat.org/hardhat3-beta-telegram-group) Telegram group or [open an issue](https://github.com/NomicFoundation/hardhat/issues/new) in our GitHub issue tracker.
 
-- [Requirements](#requirements)
-- [Initial Setup](#initial-setup)
-- [Usage](#usage)
-- [Networks](#networks)
-- [License](#license)
+## Project Overview
 
-## Requirements
+This example project includes:
 
-- Node.js: >= v20
-- Yarn: v3.2.4
-
-### Node.js <!-- omit in toc -->
-
-If you use [nvm](https://github.com/nvm-sh/nvm) to manage your Node.js versions, you can run:
-
-```bash
-nvm use
-```
-
-to switch to the correct Node.js version.
-
-See the [installation guide](https://nodejs.org/en/download/package-manager) for other ways to install Node.js.
-
-### Yarn <!-- omit in toc -->
-
-Enable [Corepack](https://www.totaltypescript.com/how-to-use-corepack), if it isn't already; this will add the Yarn binary to your `PATH`:
-
-```bash
-corepack enable
-```
-
-See the [installation guide](https://yarnpkg.com/getting-started/install) for other ways to install Yarn.
-
-## Initial Setup
-
-Install dependencies:
-
-```bash
-yarn install
-```
-
-Create a `.env` file copying the `.env.example` file:
-
-```bash
-cp .env.example .env
-```
-
-Update the `.env` file with the correct values.
+- A simple Hardhat configuration file.
+- Foundry-compatible Solidity unit tests.
+- TypeScript integration tests using [`node:test`](nodejs.org/api/test.html), the new Node.js native test runner, and [`viem`](https://viem.sh/).
+- Examples demonstrating how to connect to different types of networks, including locally simulating OP mainnet.
 
 ## Usage
 
-### Compile <!-- omit in toc -->
+### Running Tests
 
-```bash
-yarn compile
+To run all the tests in the project, execute the following command:
+
+```shell
+npx hardhat test
 ```
 
-### Clean <!-- omit in toc -->
+You can also selectively run the Solidity or `node:test` tests:
 
-```bash
-yarn clean
+```shell
+npx hardhat test solidity
+npx hardhat test nodejs
 ```
 
-### Lint <!-- omit in toc -->
+### Make a deployment to Sepolia
 
-```bash
-yarn lint
+This project includes an example Ignition module to deploy the contract. You can deploy this module to a locally simulated chain or to Sepolia.
+
+To run the deployment to a local chain:
+
+```shell
+npx hardhat ignition deploy ignition/modules/Counter.ts
 ```
 
-### Test <!-- omit in toc -->
+To run the deployment to Sepolia, you need an account with funds to send the transaction. The provided Hardhat configuration includes a Configuration Variable called `SEPOLIA_PRIVATE_KEY`, which you can use to set the private key of the account you want to use.
 
-Run tests on the Hardhat Network powered by a [ZKsync In-memory Node]((https://docs.zksync.io/build/test-and-debug/in-memory-node).
+You can set the `SEPOLIA_PRIVATE_KEY` variable using the `hardhat-keystore` plugin or by setting it as an environment variable.
 
-```bash
-yarn test
+To set the `SEPOLIA_PRIVATE_KEY` config variable using `hardhat-keystore`:
+
+```shell
+npx hardhat keystore set SEPOLIA_PRIVATE_KEY
 ```
 
-To run tests on a specific network:
+After setting the variable, you can run the deployment with the Sepolia network:
 
+```shell
+npx hardhat ignition deploy --network sepolia ignition/modules/Counter.ts
 ```
-yarn test [--network <network-name>]
-```
-
-For example, to run tests on the `lensTestnet` network:
-
-```bash
-yarn test --network lensTestnet
-```
-
-> [!TIP]
-> zkSync In-memory Node currently supports only the L2 node. If contracts also need L1, use another testing environment like [Dockerized Node](https://docs.zksync.io/build/test-and-debug/dockerized-l1-l2-nodes).
-
-### Deploy <!-- omit in toc -->
-
-```bash
-yarn deploy --script <deploy-script.ts> --network <network-name>
-```
-
-For example:
-
-```bash
-yarn deploy --script deploy-token.ts --network lensTestnet
-```
-
-## Networks
-
-- `lensTestnet`: Lens Development Network (37111).
-- `hardhat`: runs on a ZKsync [In-Memory Node](https://docs.zksync.io/build/test-and-debug/in-memory-node) for testing.
-
-## License
-
-Lens Network Hardhat Boilerplate [MIT licensed](./LICENSE)
