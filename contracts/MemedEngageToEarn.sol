@@ -30,6 +30,8 @@ interface IMemedBattle {
 }
 
 contract MemedEngageToEarn is Ownable {
+    constructor() Ownable(msg.sender) {}
+
     uint256 public constant MAX_REWARD = 350_000_000 * 1e18; // 350M tokens for engagement rewards (v2.3)
     uint256 public constant CYCLE_REWARD_PERCENTAGE = 5; // 5% of engagement rewards per cycle for battles
     uint256 public constant ENGAGEMENT_REWARDS_PER_NFT_PERCENTAGE = 20; // 20% of engagement rewards per nft as per their price

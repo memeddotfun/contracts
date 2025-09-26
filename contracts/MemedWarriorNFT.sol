@@ -3,7 +3,7 @@ pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./MemedBattle.sol";
 
@@ -55,11 +55,12 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
         uint256 tokenId
     );
     
+
     constructor(
         address _memedToken,
         address _factory,
         address _memedBattle
-    ) ERC721("Memed Warrior", "WARRIOR") {
+    ) ERC721("Memed Warrior", "WARRIOR") Ownable(msg.sender) {
         memedToken = _memedToken;
         factory = IMemedFactory(_factory);
         memedBattle = MemedBattle(_memedBattle);
@@ -239,13 +240,12 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
     /**
      * @dev Override transfer to update ownership tracking
      */
-    function _beforeTokenTransfer(
-        address from,
+    function _update(
         address to,
         uint256 tokenId,
-        uint256 batchSize
-    ) internal override {
-        super._beforeTokenTransfer(from, to, tokenId, batchSize);
+        address auth
+    ) internal override returns (address) {
+        address from = super._update(to, tokenId, auth);
         
         if (from != address(0) && to != address(0)) {
             // Update warrior owner data
@@ -255,6 +255,8 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
             _removeFromUserNFTs(from, tokenId);
             userNFTs[to].push(tokenId);
         }
+        
+        return from;
     }
     
     function getWarriorMintedBeforeByUser(address _user, uint256 _timestamp) external view returns (uint256) {
@@ -273,5 +275,9 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
      */
     function calculateMintingFee(uint256 _price) external view returns (uint256) {
         return (_price * factory.platformFeePercentage()) / factory.feeDenominator();
+    }
+
+    function _exists(uint256 _tokenId) internal view returns (bool) {
+        return _tokenId <= currentTokenId;
     }
 }

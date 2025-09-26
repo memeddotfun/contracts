@@ -3,7 +3,7 @@ pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 
 interface IMemedWarriorNFT {
@@ -129,6 +129,8 @@ contract MemedBattle is Ownable, ReentrancyGuard {
     event TokensSwapped(address indexed from, address indexed to, uint256 amountIn, uint256 amountOut);
     event RewardsDistributed(uint256 battleId, address winner, uint256 totalReward, uint256 participantCount);
     event PlatformFeeTransferred(uint256 battleId, address token, uint256 amount);
+
+    constructor() Ownable(msg.sender) {}
 
     function challengeBattle(address _memeA, address _memeB) external nonReentrant {
         IMemedFactory.TokenData memory tokenA = factory.getByToken(_memeA);

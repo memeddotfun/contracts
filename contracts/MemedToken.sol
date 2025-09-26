@@ -34,7 +34,7 @@ contract MemedToken is ERC20, Ownable {
         address _creator,
         address _factoryContract,
         address _engageToEarnContract
-    ) ERC20(_name, _ticker) Ownable() {
+    ) ERC20(_name, _ticker) Ownable(msg.sender) {
         creatorData.creator = _creator; 
         creatorData.balance = CREATOR_INCENTIVES_ALLOCATION * 70 / 100;
         factoryContract = _factoryContract;
