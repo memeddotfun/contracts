@@ -5,7 +5,7 @@ import path from "node:path";
 import factoryModule from "../ignition/modules/Factory.js";
 import battleModule from "../ignition/modules/Battle.js";
 import engageToEarnModule from "../ignition/modules/EngageToEarn.js";
-export default async function () {
+async function main() {
   const { ignition } = await hre.network.connect();
   
   const uniswapV2Router = "0x6ddD32cd941041D8b61df213B9f515A7D288Dc13";
@@ -40,3 +40,8 @@ export default async function () {
   
   console.log("Deployment completed successfully!");
 }
+
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
