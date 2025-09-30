@@ -92,8 +92,8 @@ contract MemedFactory is Ownable, ReentrancyGuard {
     }
 
     enum FairLaunchStatus {
+        NOT_STARTED,
         ACTIVE,
-        LAUNCHING,
         COMPLETED,
         FAILED
     }
@@ -152,8 +152,6 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         address indexed user,
         uint256 amount
     );
-
-    event FairLaunchToBeCompleted(uint256 indexed id, uint256 totalRaised);
 
     event FairLaunchCompleted(
         uint256 indexed id,
@@ -292,8 +290,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
 
         // Check if we can launch early
         if (fairLaunch.totalCommitted >= TARGET_ETH_WEI) {
-            fairLaunch.status = FairLaunchStatus.LAUNCHING;
-            emit FairLaunchToBeCompleted(_id, fairLaunch.totalCommitted);
+            _completeFairLaunch(_id);
         }
     }
 
@@ -318,20 +315,29 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         );
     }
 
-    function completeFairLaunch(
-        uint256 _id,
-        address _token,
-        address _warriorNFT
-    ) external onlyOwner {
+    function _completeFairLaunch(
+        uint256 _id
+    ) internal {
         FairLaunchData storage fairLaunch = fairLaunchData[_id];
         require(
-            fairLaunch.status == FairLaunchStatus.LAUNCHING,
+            fairLaunch.status == FairLaunchStatus.ACTIVE,
             "Fair launch not launching"
         );
         TokenData storage token = tokenData[_id];
-        MemedToken memedToken = MemedToken(_token);
+        MemedToken memedToken = new MemedToken(
+            token.name,
+            token.ticker,
+            token.creator,
+            address(this),
+            address(memedEngageToEarn)
+        );
 
-        token.warriorNFT = _warriorNFT;
+        MemedWarriorNFT memedWarriorNFT = new MemedWarriorNFT(
+            address(memedToken),
+            address(this),
+            address(memedBattle)
+        );
+        token.warriorNFT = address(memedWarriorNFT);
 
         token.token = address(memedToken);
         fairLaunch.status = FairLaunchStatus.COMPLETED;
