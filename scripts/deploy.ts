@@ -15,9 +15,11 @@ export default async function () {
   const memedEngageToEarnAddress = engageToEarn.address;
   const { factory } = await ignition.deploy(factoryModule, {
     parameters: {
-      memedBattle: memedBattleAddress,
-      memedEngageToEarn: memedEngageToEarnAddress,
-      uniswapV2Router: uniswapV2Router,
+      Factory: {
+        memedBattle: memedBattleAddress,
+        memedEngageToEarn: memedEngageToEarnAddress,
+        uniswapV2Router: uniswapV2Router,
+      },
     },
   });
   const config = {
@@ -31,10 +33,10 @@ export default async function () {
 
   // Set factory address in the previously deployed contracts
   console.log("Setting factory address in MemedBattle...");
-  await battle.setFactory(config.factory);
+  await battle.write.setFactory([config.factory]);
   
   console.log("Setting factory address in MemedEngageToEarn...");
-  await engageToEarn.setFactory(config.factory);
+  await engageToEarn.write.setFactory([config.factory]);
   
   console.log("Deployment completed successfully!");
 }

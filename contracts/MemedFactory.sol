@@ -205,7 +205,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         address _memedBattle,
         address _memedEngageToEarn,
         address _uniswapV2Router
-    ) {
+    ) Ownable(msg.sender) {
         memedBattle = MemedBattle(_memedBattle);
         memedEngageToEarn = IMemedEngageToEarn(_memedEngageToEarn);
         uniswapV2Router = IUniswapV2Router02(_uniswapV2Router);

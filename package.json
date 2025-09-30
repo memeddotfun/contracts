@@ -4,14 +4,19 @@
   "type": "module",
   "scripts": {
     "compile": "npx hardhat compile",
-    "deploy": "npx hardhat deploy",
-    "deploy:sepolia": "npx hardhat deploy --network baseSepolia",
-    "deploy:base": "npx hardhat deploy --network base"
+    "deploy:sepolia": "npx hardhat run scripts/deploy.ts --network baseSepolia",
+    "deploy:base": "npx hardhat run scripts/deploy.ts --network base"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-ignition": "^3.0.3",
+    "@nomicfoundation/hardhat-ignition-viem": "^3.0.3",
+    "@nomicfoundation/hardhat-keystore": "^3.0.1",
+    "@nomicfoundation/hardhat-network-helpers": "^3.0.0",
+    "@nomicfoundation/hardhat-node-test-runner": "^3.0.3",
     "@nomicfoundation/hardhat-toolbox-viem": "^5.0.0",
     "@nomicfoundation/hardhat-verify": "^3.0.2",
+    "@nomicfoundation/hardhat-viem": "^3.0.0",
+    "@nomicfoundation/hardhat-viem-assertions": "^3.0.2",
     "@openzeppelin/contracts": "^5.4.0",
     "@types/node": "^22.18.6",
     "forge-std": "github:foundry-rs/forge-std#v1.9.4",
