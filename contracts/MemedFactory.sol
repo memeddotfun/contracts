@@ -6,16 +6,6 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./MemedToken.sol";
 import "./MemedBattle.sol";
-import "./MemedWarriorNFT.sol";
-
-interface IMemedTokenSale {
-    function startFairLaunch(
-        address _creator
-    ) external returns (uint256);
-    function tokenIdByAddress(address _token) external view returns (uint256);
-    function isMintable(address _creator) external view returns (bool);
-    function INITIAL_SUPPLY() external view returns (uint256);
-}
 
 contract MemedFactory is Ownable, ReentrancyGuard {
     uint256 public constant REWARD_PER_ENGAGEMENT = 100000;

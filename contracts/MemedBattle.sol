@@ -49,7 +49,13 @@ interface IMemedFactory {
 }
 
 interface IMemedTokenSale {
-    function swapExactForNativeToken(uint256 _amount, address _token, address _to) external returns (uint[] memory amounts);
+    function swapExactForNativeToken(uint256 _amount, address _token, address _to) external returns (uint[] memory amounts);    
+    function startFairLaunch(
+        address _creator
+    ) external returns (uint256);
+    function tokenIdByAddress(address _token) external view returns (uint256);
+    function isMintable(address _creator) external view returns (bool);
+    function INITIAL_SUPPLY() external view returns (uint256);
 }
 
 struct HeatUpdate {
