@@ -19,7 +19,6 @@ struct TokenBattleAllocation {
 
 interface IMemedFactory {
     function getWarriorNFT(address _token) external view returns (address);
-    function swap(uint256 _amount, address[] calldata _path, address _to) external returns (uint256[] memory);
     function getMemedBattle() external view returns (address);
 }
 
@@ -27,6 +26,10 @@ interface IMemedBattle {
     function tokenBattleAllocations(address _token) external view returns (TokenBattleAllocation memory);
     function getUserTokenBattleAllocations(uint256 _tokenId, uint256 _until) external view returns (TokenBattleAllocation memory);
     function tokenAllocations(address _user) external view returns (uint256[] memory);
+}
+
+interface IMemedTokenSale {
+    function swap(uint256 _amount, address[] calldata _path, address _to) external returns (uint256[] memory);
 }
 
 contract MemedEngageToEarn is Ownable {
@@ -38,7 +41,7 @@ contract MemedEngageToEarn is Ownable {
     uint256 public constant ENGAGEMENT_REWARDS_CHANGE = 100 *1e18; // engagement rewards change per battle
     IMemedFactory public factory;
     uint256 public engagementRewardId;
-    
+    IMemedTokenSale public tokenSale;
     struct EngagementReward {
         address token;
         uint256 amountClaimed;
@@ -118,7 +121,7 @@ contract MemedEngageToEarn is Ownable {
         address[] memory path = new address[](2);
         path[0] = _loser;
         path[1] = _winner;
-        uint256[] memory amounts = factory.swap(_amount, path, _winner);
+        uint256[] memory amounts = tokenSale.swap(_amount, path, _winner);
         require(amounts[1] > 0, "Swap failed");
         return amounts[1];
     }
@@ -129,9 +132,10 @@ contract MemedEngageToEarn is Ownable {
         IERC20(_token).transfer(_winner, _amount);
     }
 
-    function setFactory(address _factory) external onlyOwner {
+    function setFactoryAndTokenSale(address _factory, address _tokenSale) external onlyOwner {
         require(address(factory) == address(0), "Already set");
         factory = IMemedFactory(_factory);
+        tokenSale = IMemedTokenSale(_tokenSale);
     }
     
     function isRewardable(address _token) external view returns (bool) {

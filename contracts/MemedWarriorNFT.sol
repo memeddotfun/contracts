@@ -48,13 +48,6 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
     );
     
     event TokensBurned(uint256 amount, uint256 totalPlatformHeat);
-    
-    event MintingFeeCollected(
-        address indexed user,
-        uint256 feeAmount,
-        uint256 tokenId
-    );
-    
 
     constructor(
         address _memedToken,
@@ -93,29 +86,13 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
             "Transfer failed"
         );
         
-        // Calculate 1% platform fee
-        uint256 platformFee = (price * factory.platformFeePercentage()) / factory.feeDenominator();
-        uint256 amountToBurn = price - platformFee;
-        
-        // Send platform fee to factory owner (if fee > 0)
-        if (platformFee > 0) {
-            address factoryOwner = factory.owner();
-            IERC20(memedToken).transfer(address(factory), platformFee);
-            factory.swapExactForNativeToken(platformFee, memedToken, factoryOwner);
-        }
-        
-        // Burn the remaining MEME tokens (99% as per new specification)
-        _burnTokens(amountToBurn);
+        // Burn the remaining MEME tokens
+        _burnTokens(price);
         
         // Mint NFT
         currentTokenId++;
         uint256 tokenId = currentTokenId;
-        
-        // Emit fee collection event (if fee > 0)
-        if (platformFee > 0) {
-            emit MintingFeeCollected(msg.sender, platformFee, tokenId);
-        }
-        
+ 
         _safeMint(msg.sender, tokenId);
         
         // Store warrior data
@@ -268,13 +245,6 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
             }
         }
         return count;
-    }
-    
-    /**
-     * @dev Calculate platform fee for a given price
-     */
-    function calculateMintingFee(uint256 _price) external view returns (uint256) {
-        return (_price * factory.platformFeePercentage()) / factory.feeDenominator();
     }
 
     function _exists(uint256 _tokenId) internal view returns (bool) {

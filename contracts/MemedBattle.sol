@@ -36,20 +36,24 @@ interface IMemedFactory {
     }
     
     function getByToken(address _token) external view returns (TokenData memory);
-    function updateHeat(HeatUpdate[] calldata _heatUpdates) external;
+    function updateHeat(address _token, uint256 _heat) external;
+    function getTokenById(uint256 _id) external view returns (TokenData memory);
     function getHeat(address _token) external view returns (uint256);
     function getWarriorNFT(address _token) external view returns (address);
     function getTokenId(address _token) external view returns (uint256);
     function getMemedEngageToEarn() external view returns (IMemedEngageToEarn);
+    function getMemedBattle() external view returns (address);
+    function completeFairLaunch(uint256 _id, address _token, address _warriorNFT) external;
     function owner() external view returns (address);
-    function platformFeePercentage() external view returns (uint256);
-    function feeDenominator() external view returns (uint256);
-    function swapExactForNativeToken(uint256 _amount, address _token, address _to) external returns (uint[] memory amounts);
     function battleUpdate(address _winner, address _loser) external;
 }
 
+interface IMemedTokenSale {
+    function swapExactForNativeToken(uint256 _amount, address _token, address _to) external returns (uint[] memory amounts);
+}
+
 struct HeatUpdate {
-    uint256 id;
+    address token;
     uint256 heat;
 }
 
@@ -58,6 +62,7 @@ struct HeatUpdate {
 /// @title MemedBattle Contract
 contract MemedBattle is Ownable, ReentrancyGuard {
     IMemedFactory public factory;
+    IMemedTokenSale public tokenSale;
     // Battle constants from Memed.fun v2.3 specification
     uint256 public constant ENGAGEMENT_WEIGHT = 60; // 60% engagement, 40% value
     uint256 public constant VALUE_WEIGHT = 40;
@@ -271,10 +276,7 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         }
         
         // Update heat for winner
-        HeatUpdate[] memory heatUpdate = new HeatUpdate[](1);
-        heatUpdate[0].id = factory.getTokenId(actualWinner);
-        heatUpdate[0].heat = 20000; // Heat boost for winning
-        factory.updateHeat(heatUpdate);
+        factory.updateHeat(actualWinner, 20000);
         factory.battleUpdate(actualWinner, actualLoser);
         emit BattleResolved(_battleId, actualWinner, finalScoreA + finalScoreB, valueScoreA + valueScoreB);
     }
@@ -300,9 +302,10 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         emit BattleRewardsClaimed(_battleId, msg.sender, reward);
     }
 
-    function setFactory(address payable _factory) external onlyOwner {
+    function setFactoryAndTokenSale(address _factory, address _tokenSale) external onlyOwner {
         require(address(factory) == address(0), "Factory already set");
         factory = IMemedFactory(_factory);
+        tokenSale = IMemedTokenSale(_tokenSale);
     }
     
 
