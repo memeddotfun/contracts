@@ -8,9 +8,9 @@ import engageToEarnModule from "../ignition/modules/EngageToEarn.js";
 import tokenSaleModule from "../ignition/modules/TokenSale.js";
 
 async function main() {
-  const { ignition } = await hre.network.connect();
+  const { ignition, id } = await hre.network.connect();
   
-  const uniswapV2Router = "0x6ddD32cd941041D8b61df213B9f515A7D288Dc13";
+  const uniswapV2Router = id === 84532 ? "0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4" : "0x2626664c2603336E57B271c5C0b26F421741e481";
   const { battle } = await ignition.deploy(battleModule);
   const { engageToEarn } = await ignition.deploy(engageToEarnModule);
   const { tokenSale } = await ignition.deploy(tokenSaleModule);
