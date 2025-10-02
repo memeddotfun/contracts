@@ -1,6 +1,7 @@
 import type { HardhatUserConfig } from "hardhat/config";
 
 import hardhatToolboxViemPlugin from "@nomicfoundation/hardhat-toolbox-viem";
+import hardhatVerifyPlugin from "@nomicfoundation/hardhat-verify";
 import hardhatKeystorePlugin from "@nomicfoundation/hardhat-keystore";
 import { configVariable } from "hardhat/config";
 
@@ -11,7 +12,7 @@ const ETHERSCAN_API_KEY = configVariable("ETHERSCAN_API_KEY");
 
 
 const config: HardhatUserConfig = {
-  plugins: [hardhatToolboxViemPlugin, hardhatKeystorePlugin],
+  plugins: [hardhatToolboxViemPlugin, hardhatKeystorePlugin, hardhatVerifyPlugin],
   solidity: {
     profiles: {
       default: {
