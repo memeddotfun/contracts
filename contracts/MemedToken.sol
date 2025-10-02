@@ -75,6 +75,9 @@ contract MemedToken is ERC20, Ownable {
     }
 
     function claim(address to, uint256 amount) external onlyFactory {
+        require(to != address(0), "Invalid address");
+        require(amount > 0, "Invalid amount");
+        require(totalSupply() + amount <= MAX_SUPPLY, "Exceeds max supply");
         _mint(to, amount);
     }
 }
