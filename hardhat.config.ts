@@ -15,16 +15,18 @@ const config: HardhatUserConfig = {
   solidity: {
     profiles: {
       default: {
-        version: "0.8.24",
-      },
-      production: {
-        version: "0.8.24",
-        settings: {
-          optimizer: {
-            enabled: true,
-            runs: 200,
+        compilers: [
+          {
+            version: "0.8.28",
+            settings: {
+              optimizer: {
+                enabled: true,
+                runs: 200,
+              },
+              viaIR: true,
+            },
           },
-        },
+        ],
       },
     },
   },
@@ -37,7 +39,7 @@ const config: HardhatUserConfig = {
     },
     baseSepolia: {
       type: "http",
-      url: `https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
+      url: `https://sepolia.base.org`,
       accounts: [WALLET_KEY || ""],
       chainId: 84532,
     },

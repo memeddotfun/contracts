@@ -1,11 +1,52 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.28;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./MemedToken.sol";
 import "./MemedBattle.sol";
+
+// Uniswap V2 interfaces
+interface IUniswapV2Factory {
+    function createPair(
+        address tokenA,
+        address tokenB
+    ) external returns (address pair);
+}
+
+interface IUniswapV2Router02 {
+    function factory() external pure returns (address);
+    function WETH() external pure returns (address);
+    function addLiquidityETH(
+        address token,
+        uint amountTokenDesired,
+        uint amountTokenMin,
+        uint amountETHMin,
+        address to,
+        uint deadline
+    )
+        external
+        payable
+        returns (uint amountToken, uint amountETH, uint liquidity);
+    function swapExactTokensForTokens(
+        uint amountIn,
+        uint amountOutMin,
+        address[] calldata path,
+        address to,
+        uint deadline
+    ) external returns (uint[] memory amounts);
+}
+
+
+interface IMemedTokenSale {
+    function startFairLaunch(
+        address _creator
+    ) external returns (uint256);
+    function tokenIdByAddress(address _token) external view returns (uint256);
+    function isMintable(address _creator) external view returns (bool);
+    function INITIAL_SUPPLY() external view returns (uint256);
+}
 
 contract MemedFactory is Ownable, ReentrancyGuard {
     uint256 public constant REWARD_PER_ENGAGEMENT = 100000;
@@ -44,6 +85,8 @@ contract MemedFactory is Ownable, ReentrancyGuard {
 
     mapping(uint256 => TokenData) public tokenData;
     address[] public tokens;
+    IUniswapV2Router02 public uniswapV2Router;
+    IUniswapV2Factory public uniswapV2Factory;
 
     // Events
     event TokenCreated(
@@ -75,11 +118,14 @@ contract MemedFactory is Ownable, ReentrancyGuard {
     constructor(
         address _memedTokenSale,
         address _memedBattle,
-        address _memedEngageToEarn
+        address _memedEngageToEarn,
+        address _uniswapV2Router
     ) Ownable(msg.sender) {
         memedTokenSale = IMemedTokenSale(_memedTokenSale);
         memedBattle = MemedBattle(_memedBattle);
         memedEngageToEarn = IMemedEngageToEarn(_memedEngageToEarn);
+        uniswapV2Router = IUniswapV2Router02(_uniswapV2Router);
+        uniswapV2Factory = IUniswapV2Factory(uniswapV2Router.factory());
     }
 
     function startFairLaunch(
@@ -207,6 +253,54 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         );
     }
 
+    
+    function createUniswapLP(
+        address _token,
+        uint256 _ethAmount,
+        uint256 _tokenAmount
+    ) public returns (address, uint256, uint256, uint256) {
+        require(msg.sender == address(memedTokenSale), "unauthorized");
+
+        // Create Uniswap pair
+        address pair = uniswapV2Factory.createPair(
+            _token,
+            uniswapV2Router.WETH()
+        );
+        
+        // Approve router to spend tokens
+        IERC20(_token).approve(address(uniswapV2Router), _tokenAmount);
+
+        // Add liquidity to Uniswap
+        (uint amountToken, uint amountETH, uint liquidity) = uniswapV2Router
+            .addLiquidityETH{value: _ethAmount}(
+            _token,
+            _tokenAmount,
+            0, // Accept any amount of tokens
+            0, // Accept any amount of ETH
+            address(0), // LP tokens go to zero address
+            block.timestamp + 300 // 5 minute deadline
+        );
+
+        return (pair, amountToken, amountETH, liquidity);
+    }
+
+    function swap(
+        uint256 _amount,
+        address[] calldata _path,
+        address _to
+    ) external nonReentrant returns (uint256[] memory) {
+        require(msg.sender == address(memedBattle) || msg.sender == address(memedEngageToEarn), "Only battle or engage to earn can swap");
+        IERC20(_path[0]).approve(address(uniswapV2Router), _amount);
+        uint256[] memory amounts = uniswapV2Router.swapExactTokensForTokens(
+            _amount,
+            0,
+            _path,
+            _to,
+            block.timestamp + 300
+        );
+        return amounts;
+    }
+
     function getByToken(address _token) public view returns (TokenData memory) {
         return tokenData[memedTokenSale.tokenIdByAddress(_token)];
     }
@@ -245,4 +339,6 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         }
         return result;
     }
+
+    receive() external payable {}
 }

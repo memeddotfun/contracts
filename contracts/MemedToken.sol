@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.28;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract MemedToken is ERC20, Ownable {
-    uint256 public constant MAX_SUPPLY = 1_000_000_000 * 1e18; // 1B tokens
+    uint256 public immutable MAX_SUPPLY;
     
     // Token distribution according to Memed.fun v2.3 tokenomics
-    uint256 public constant FAIR_LAUNCH_ALLOCATION = (MAX_SUPPLY * 20) / 100; // 200M (20%)
-    uint256 public constant ENGAGEMENT_REWARDS_ALLOCATION = (MAX_SUPPLY * 35) / 100; // 350M (35%)
-    uint256 public constant CREATOR_INCENTIVES_ALLOCATION = (MAX_SUPPLY * 15) / 100; // 150M (15%)
-    uint256 public constant CREATOR_INITIAL_ALLOCATION = (MAX_SUPPLY * 5) / 100; // 50M (5%)
+    uint256 public constant FAIR_LAUNCH_ALLOCATION = 200000000 * 1e18; // 200M (20%)
+    uint256 public constant ENGAGEMENT_REWARDS_ALLOCATION = 350000000 * 1e18; // 350M (35%)
+    uint256 public constant CREATOR_INCENTIVES_ALLOCATION = 150000000 * 1e18; // 150M (15%)
+    uint256 public constant CREATOR_INITIAL_ALLOCATION = 50000000 * 1e18; // 50M (5%)
     uint256 public constant CREATOR_INITIAL_ALLOCATION_PER_UNLOCK = 2000000 * 1e18; // 2M tokens
 
     address public engageToEarnContract;
@@ -33,13 +33,15 @@ contract MemedToken is ERC20, Ownable {
         string memory _ticker,
         address _creator,
         address _factoryContract,
-        address _engageToEarnContract
+        address _engageToEarnContract,
+        uint256 _lpSupply
     ) ERC20(_name, _ticker) Ownable(_factoryContract) {
         creatorData.creator = _creator; 
         creatorData.balance = CREATOR_INCENTIVES_ALLOCATION * 70 / 100;
         factoryContract = _factoryContract;
         engageToEarnContract = _engageToEarnContract;
-        
+        MAX_SUPPLY = 700000000 * 1e18 + _lpSupply;
+        _mint(factoryContract, _lpSupply);
         _mint(engageToEarnContract, ENGAGEMENT_REWARDS_ALLOCATION);
         if(_creator != address(0)) {
             _mint(_creator, CREATOR_INITIAL_ALLOCATION);
@@ -73,10 +75,6 @@ contract MemedToken is ERC20, Ownable {
     }
 
     function claim(address to, uint256 amount) external onlyFactory {
-        _mint(to, amount);
-    }
-    
-    function mintUniswapLP(address to, uint256 amount) external onlyFactory {
         _mint(to, amount);
     }
 }

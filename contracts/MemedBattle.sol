@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.28;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -37,6 +37,8 @@ interface IMemedFactory {
     
     function getByToken(address _token) external view returns (TokenData memory);
     function updateHeat(address _token, uint256 _heat) external;
+    function createUniswapLP(address _token, uint256 _ethAmount, uint256 _tokenAmount) external returns (address, uint256, uint256, uint256);
+    function swap(uint256 _amount, address[] calldata _path, address _to) external returns (uint[] memory amounts);
     function getTokenById(uint256 _id) external view returns (TokenData memory);
     function getHeat(address _token) external view returns (uint256);
     function getWarriorNFT(address _token) external view returns (address);
@@ -46,16 +48,6 @@ interface IMemedFactory {
     function completeFairLaunch(uint256 _id, address _token, address _warriorNFT) external;
     function owner() external view returns (address);
     function battleUpdate(address _winner, address _loser) external;
-}
-
-interface IMemedTokenSale {
-    function swapExactForNativeToken(uint256 _amount, address _token, address _to) external returns (uint[] memory amounts);    
-    function startFairLaunch(
-        address _creator
-    ) external returns (uint256);
-    function tokenIdByAddress(address _token) external view returns (uint256);
-    function isMintable(address _creator) external view returns (bool);
-    function INITIAL_SUPPLY() external view returns (uint256);
 }
 
 struct HeatUpdate {
@@ -68,7 +60,6 @@ struct HeatUpdate {
 /// @title MemedBattle Contract
 contract MemedBattle is Ownable, ReentrancyGuard {
     IMemedFactory public factory;
-    IMemedTokenSale public tokenSale;
     // Battle constants from Memed.fun v2.3 specification
     uint256 public constant ENGAGEMENT_WEIGHT = 60; // 60% engagement, 40% value
     uint256 public constant VALUE_WEIGHT = 40;
@@ -308,10 +299,9 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         emit BattleRewardsClaimed(_battleId, msg.sender, reward);
     }
 
-    function setFactoryAndTokenSale(address _factory, address _tokenSale) external onlyOwner {
+    function setFactory(address _factory) external onlyOwner {
         require(address(factory) == address(0), "Factory already set");
         factory = IMemedFactory(_factory);
-        tokenSale = IMemedTokenSale(_tokenSale);
     }
     
 

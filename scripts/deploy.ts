@@ -5,17 +5,22 @@ import path from "node:path";
 import factoryModule from "../ignition/modules/Factory.js";
 import battleModule from "../ignition/modules/Battle.js";
 import engageToEarnModule from "../ignition/modules/EngageToEarn.js";
+import tokenSaleModule from "../ignition/modules/TokenSale.js";
+
 async function main() {
   const { ignition } = await hre.network.connect();
   
   const uniswapV2Router = "0x6ddD32cd941041D8b61df213B9f515A7D288Dc13";
   const { battle } = await ignition.deploy(battleModule);
   const { engageToEarn } = await ignition.deploy(engageToEarnModule);
+  const { tokenSale } = await ignition.deploy(tokenSaleModule);
   const memedBattleAddress = battle.address;
   const memedEngageToEarnAddress = engageToEarn.address;
+  const memedTokenSaleAddress = tokenSale.address;
   const { factory } = await ignition.deploy(factoryModule, {
     parameters: {
-      Factory: {
+      FactoryModule: {
+        memedTokenSale: memedTokenSaleAddress,
         memedBattle: memedBattleAddress,
         memedEngageToEarn: memedEngageToEarnAddress,
         uniswapV2Router: uniswapV2Router,
@@ -26,6 +31,7 @@ async function main() {
     factory: factory.address,
     memedBattle: memedBattleAddress,
     memedEngageToEarn: memedEngageToEarnAddress,
+    memedTokenSale: memedTokenSaleAddress,
   };
 
 
@@ -37,6 +43,9 @@ async function main() {
   
   console.log("Setting factory address in MemedEngageToEarn...");
   await engageToEarn.write.setFactory([config.factory]);
+  
+  console.log("Setting factory address in MemedTokenSale...");
+  await tokenSale.write.setFactory([config.factory]);
   
   console.log("Deployment completed successfully!");
 }

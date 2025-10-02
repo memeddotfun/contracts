@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.28;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -7,48 +7,8 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./MemedToken.sol";
 import "./MemedWarriorNFT.sol";
 
-// Uniswap V2 interfaces
-interface IUniswapV2Factory {
-    function createPair(
-        address tokenA,
-        address tokenB
-    ) external returns (address pair);
-}
-
-interface IUniswapV2Router02 {
-    function factory() external pure returns (address);
-    function WETH() external pure returns (address);
-    function swapExactTokensForETH(
-        uint amountIn,
-        uint amountOutMin,
-        address[] calldata path,
-        address to,
-        uint deadline
-    ) external returns (uint[] memory amounts);
-    function addLiquidityETH(
-        address token,
-        uint amountTokenDesired,
-        uint amountTokenMin,
-        uint amountETHMin,
-        address to,
-        uint deadline
-    )
-        external
-        payable
-        returns (uint amountToken, uint amountETH, uint liquidity);
-    function swapExactTokensForTokens(
-        uint amountIn,
-        uint amountOutMin,
-        address[] calldata path,
-        address to,
-        uint deadline
-    ) external returns (uint[] memory amounts);
-}
 
 contract MemedTokenSale is Ownable, ReentrancyGuard {
-    uint256 public constant REWARD_PER_ENGAGEMENT = 100000;
-    uint256 public constant MAX_ENGAGE_USER_REWARD_PERCENTAGE = 2;
-    uint256 public constant MAX_ENGAGE_CREATOR_REWARD_PERCENTAGE = 1;
 
     // Bonding curve parameters
     uint256 public constant FAIR_LAUNCH_DURATION = 30 days;
@@ -61,8 +21,6 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
     uint256 public platformFeePercentage = 10; // 1% to platform (10/1000)
     uint256 public feeDenominator = 1000; // For 1% fee calculation
     IMemedFactory public memedFactory;
-    IUniswapV2Router02 public uniswapV2Router;
-    IUniswapV2Factory public uniswapV2Factory;
 
     enum FairLaunchStatus {
         NOT_STARTED,
@@ -154,12 +112,7 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
 
 
 
-    constructor(
-        address _uniswapV2Router
-    ) Ownable(msg.sender) {
-        uniswapV2Router = IUniswapV2Router02(_uniswapV2Router);
-        uniswapV2Factory = IUniswapV2Factory(uniswapV2Router.factory());
-    }
+    constructor() Ownable(msg.sender) {}
 
     function startFairLaunch(
         address _creator
@@ -244,12 +197,23 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
             "Fair launch not launching"
         );
         IMemedFactory.TokenData memory token = memedFactory.getTokenById(_id);
+                uint256 s = fairLaunch.totalSold;
+        uint256 p = priceAt(s);
+        require(p > 0, "price zero");
+
+        uint256 tokenAmount = (TARGET_ETH_WEI * DECIMALS) / p;
+
+        uint256 remaining = TOTAL_FOR_SALE - s;
+        if (tokenAmount > remaining) {
+            tokenAmount = remaining;
+        }
         MemedToken memedToken = new MemedToken(
             token.name,
             token.ticker,
             token.creator,
             address(memedFactory),
-            address(memedFactory.getMemedEngageToEarn())
+            address(memedFactory.getMemedEngageToEarn()),
+            tokenAmount
         );
 
         MemedWarriorNFT memedWarriorNFT = new MemedWarriorNFT(
@@ -262,93 +226,15 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
         token.token = address(memedToken);
         fairLaunch.status = FairLaunchStatus.COMPLETED;
         tokenIdByAddress[address(memedToken)] = _id;
-        // Create Uniswap pair and add liquidity
-        _createUniswapLP(_id, address(memedToken), fairLaunch.totalCommitted);
+        // Create Uniswap pair and add liquidity);
 
+        (bool success, ) = payable(address(memedFactory)).call{value: fairLaunch.totalCommitted}("");
+        require(success, "Transfer failed");
+        
+        memedFactory.createUniswapLP(address(memedToken), fairLaunch.totalCommitted, tokenAmount);
         fairLaunch.status = FairLaunchStatus.COMPLETED;
         memedFactory.completeFairLaunch(_id, address(memedToken), address(memedWarriorNFT));
         emit TokenCreated(_id);
-    }
-
-    function _createUniswapLP(
-        uint256 _id,
-        address _token,
-        uint256 _ethAmount
-    ) internal {
-        FairLaunchData storage fairLaunch = fairLaunchData[_id];
-
-        uint256 s = fairLaunch.totalSold;
-        uint256 p = priceAt(s);
-        require(p > 0, "price zero");
-
-        uint256 tokenAmount = (TARGET_ETH_WEI * DECIMALS) / p;
-
-        uint256 remaining = TOTAL_FOR_SALE - s;
-        if (tokenAmount > remaining) {
-            tokenAmount = remaining;
-        }
-
-        MemedToken(_token).mintUniswapLP(address(this), tokenAmount);
-
-        // Create Uniswap pair
-        address pair = uniswapV2Factory.createPair(
-            _token,
-            uniswapV2Router.WETH()
-        );
-        fairLaunch.uniswapPair = pair;
-
-        // Approve router to spend tokens
-        IERC20(_token).approve(address(uniswapV2Router), tokenAmount);
-
-        // Add liquidity to Uniswap
-        (uint amountToken, uint amountETH, uint liquidity) = uniswapV2Router
-            .addLiquidityETH{value: _ethAmount}(
-            _token,
-            tokenAmount,
-            0, // Accept any amount of tokens
-            0, // Accept any amount of ETH
-            address(0), // LP tokens go to zero address
-            block.timestamp + 300 // 5 minute deadline
-        );
-
-        emit LiquidityAdded(_id, pair, amountToken, amountETH, liquidity);
-    }
-
-    function swap(
-        uint256 _amount,
-        address[] calldata _path,
-        address _to
-    ) external nonReentrant returns (uint256[] memory) {
-        require(msg.sender == memedFactory.getMemedBattle() || msg.sender == address(memedFactory.getMemedEngageToEarn()), "Only battle or engage to earn can swap");
-        IERC20(_path[0]).approve(address(uniswapV2Router), _amount);
-        uint256[] memory amounts = uniswapV2Router.swapExactTokensForTokens(
-            _amount,
-            0,
-            _path,
-            _to,
-            block.timestamp + 300
-        );
-        return amounts;
-    }
-
-    function swapExactForNativeToken(
-        uint256 _amount,
-        address _token,
-        address _to
-    ) external returns (uint[] memory amounts) {
-        require(msg.sender == address(memedFactory.getMemedEngageToEarn()) || msg.sender == memedFactory.getMemedBattle(), "Only engage to earn or battle can swap");
-        IERC20(_token).approve(address(uniswapV2Router), _amount);
-        address[] memory path = new address[](2);
-        path[0] = _token;
-        path[1] = uniswapV2Router.WETH();
-        return
-            uniswapV2Router.swapExactTokensForETH(
-                _amount,
-                0,
-                path,
-                _to,
-                block.timestamp + 300
-            );
     }
 
     function sellTokens(uint256 _id, uint256 _amount) external nonReentrant {
@@ -524,6 +410,11 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
         platformFeePercentage = _platformFeePercentage;
         feeDenominator = _feeDenominator;
         emit PlatformFeeSet(_platformFeePercentage, _feeDenominator);
+    }
+
+    function setFactory(address _memedFactory) external onlyOwner {
+        require(address(memedFactory) == address(0), "Factory already set");
+        memedFactory = IMemedFactory(_memedFactory);
     }
 
     // Receive ETH
