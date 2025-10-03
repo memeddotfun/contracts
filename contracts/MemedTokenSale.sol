@@ -72,8 +72,13 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
     event FairLaunchCompleted(
         uint256 indexed id,
         address indexed token,
-        uint256 totalRaised,
-        bool successful
+        address indexed warriorNFT,
+        uint256 totalRaised
+    );
+
+    event FairLaunchFailed(
+        uint256 indexed id,
+        uint256 totalRaised
     );
 
     event LiquidityAdded(
@@ -95,10 +100,6 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
         address indexed seller,
         uint256 tokenAmount,
         uint256 ethReceived
-    );
-
-    event TokenCreated(
-        uint256 indexed id
     );
 
     event PlatformFeeCollected(
@@ -234,7 +235,7 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
         memedFactory.createUniswapLP(address(memedToken), fairLaunch.totalCommitted, tokenAmount);
         fairLaunch.status = FairLaunchStatus.COMPLETED;
         memedFactory.completeFairLaunch(_id, address(memedToken), address(memedWarriorNFT));
-        emit TokenCreated(_id);
+        emit FairLaunchCompleted(_id, address(memedToken), address(memedWarriorNFT), fairLaunch.totalCommitted);
     }
 
     function sellTokens(uint256 _id, uint256 _amount) external nonReentrant {
@@ -320,11 +321,9 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
                 blockExpiry,
                 "Failed fair launch"
             );
-            emit FairLaunchCompleted(
+            emit FairLaunchFailed(
                 _id,
-                address(0),
-                fairLaunch.totalCommitted,
-                false
+                fairLaunch.totalCommitted
             );
         }
         Commitment storage commitment = fairLaunch.commitments[msg.sender];
