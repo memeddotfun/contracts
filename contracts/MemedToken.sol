@@ -32,13 +32,12 @@ contract MemedToken is ERC20, Ownable {
         string memory _name,
         string memory _ticker,
         address _creator,
-        address _factoryContract,
         address _engageToEarnContract,
         uint256 _lpSupply
-    ) ERC20(_name, _ticker) Ownable(_factoryContract) {
+    ) ERC20(_name, _ticker) Ownable(msg.sender) {
         creatorData.creator = _creator; 
         creatorData.balance = CREATOR_INCENTIVES_ALLOCATION * 70 / 100;
-        factoryContract = _factoryContract;
+        factoryContract = msg.sender;
         engageToEarnContract = _engageToEarnContract;
         MAX_SUPPLY = 700000000 * 1e18 + _lpSupply;
         _mint(factoryContract, _lpSupply);

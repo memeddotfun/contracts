@@ -5,6 +5,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./MemedToken.sol";
+import "./MemedWarriorNFT.sol";
 import "./MemedBattle.sol";
 
 // Uniswap V2 interfaces
@@ -162,19 +163,6 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         );
     }
 
-    function completeFairLaunch(
-        uint256 _id,
-        address _token,
-        address _warriorNFT
-    ) external {
-        require(msg.sender == address(memedTokenSale), "unauthorized");
-        TokenData memory token = tokenData[_id];
-        token.token = _token;
-        token.warriorNFT = _warriorNFT;
-        tokens.push(_token);
-        emit TokenCompletedFairLaunch(_id, _token, _warriorNFT);
-    }
-
     function claimToken(
         address _token,
         address _creator
@@ -254,26 +242,42 @@ contract MemedFactory is Ownable, ReentrancyGuard {
     }
 
     
-    function createUniswapLP(
-        address _token,
-        uint256 _ethAmount,
-        uint256 _tokenAmount
-    ) public returns (address, uint256, uint256, uint256) {
+    function completeFairLaunch(
+        uint256 _id,
+        uint256 _tokenAmount,
+        uint256 _tokenBAmount
+    ) external returns (address, address) {
         require(msg.sender == address(memedTokenSale), "unauthorized");
-
-        // Create Uniswap pair
+        
+        TokenData memory token = tokenData[_id];
+        require(token.token == address(0), "Token already completed");
+        MemedToken memedToken = new MemedToken(
+            token.name,
+            token.ticker,
+            token.creator,
+            address(memedEngageToEarn),
+            _tokenAmount
+        );
+        MemedWarriorNFT memedWarriorNFT = new MemedWarriorNFT(
+            address(memedToken),
+            address(memedBattle)
+        );
+        token.token = address(memedToken);
+        token.warriorNFT = address(memedWarriorNFT);
+        tokens.push(address(memedToken));
+        emit TokenCompletedFairLaunch(_id, address(memedToken), address(memedWarriorNFT));
         address pair = uniswapV2Factory.createPair(
-            _token,
+            address(memedToken),
             uniswapV2Router.WETH()
         );
         
         // Approve router to spend tokens
-        IERC20(_token).approve(address(uniswapV2Router), _tokenAmount);
+        IERC20(address(memedToken)).approve(address(uniswapV2Router), _tokenAmount);
 
         // Add liquidity to Uniswap
-        (uint amountToken, uint amountETH, uint liquidity) = uniswapV2Router
-            .addLiquidityETH{value: _ethAmount}(
-            _token,
+        uniswapV2Router
+            .addLiquidityETH{value: _tokenBAmount}(
+            address(memedToken),
             _tokenAmount,
             0, // Accept any amount of tokens
             0, // Accept any amount of ETH
@@ -281,7 +285,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
             block.timestamp + 300 // 5 minute deadline
         );
 
-        return (pair, amountToken, amountETH, liquidity);
+        return (address(memedToken), pair);
     }
 
     function swap(
@@ -307,6 +311,10 @@ contract MemedFactory is Ownable, ReentrancyGuard {
 
     function getWarriorNFT(address _token) external view returns (address) {
         return tokenData[memedTokenSale.tokenIdByAddress(_token)].warriorNFT;
+    }
+
+    function getCreatorById(uint256 _id) external view returns (address) {
+        return tokenData[_id].creator;
     }
 
 

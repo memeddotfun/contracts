@@ -37,7 +37,6 @@ interface IMemedFactory {
     
     function getByToken(address _token) external view returns (TokenData memory);
     function updateHeat(address _token, uint256 _heat) external;
-    function createUniswapLP(address _token, uint256 _ethAmount, uint256 _tokenAmount) external returns (address, uint256, uint256, uint256);
     function swap(uint256 _amount, address[] calldata _path, address _to) external returns (uint[] memory amounts);
     function getTokenById(uint256 _id) external view returns (TokenData memory);
     function getHeat(address _token) external view returns (uint256);
@@ -45,7 +44,7 @@ interface IMemedFactory {
     function getTokenId(address _token) external view returns (uint256);
     function getMemedEngageToEarn() external view returns (IMemedEngageToEarn);
     function getMemedBattle() external view returns (address);
-    function completeFairLaunch(uint256 _id, address _token, address _warriorNFT) external;
+    function completeFairLaunch(uint256 _id, uint256 _tokenAmount, uint256 _tokenBAmount) external returns (address, address);
     function owner() external view returns (address);
     function battleUpdate(address _winner, address _loser) external;
 }

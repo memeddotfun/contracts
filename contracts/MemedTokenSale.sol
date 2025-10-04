@@ -4,9 +4,11 @@ pragma solidity ^0.8.28;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "./MemedToken.sol";
-import "./MemedWarriorNFT.sol";
 
+interface IMemedFactory {
+    function completeFairLaunch(uint256 _id, uint256 _tokenAmount, uint256 _tokenBAmount) external returns (address, address);
+    function getCreatorById(uint256 _id) external view returns (address);
+}
 
 contract MemedTokenSale is Ownable, ReentrancyGuard {
 
@@ -197,8 +199,7 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
             fairLaunch.status == FairLaunchStatus.ACTIVE,
             "Fair launch not launching"
         );
-        IMemedFactory.TokenData memory token = memedFactory.getTokenById(_id);
-                uint256 s = fairLaunch.totalSold;
+        uint256 s = fairLaunch.totalSold;
         uint256 p = priceAt(s);
         require(p > 0, "price zero");
 
@@ -208,34 +209,18 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
         if (tokenAmount > remaining) {
             tokenAmount = remaining;
         }
-        MemedToken memedToken = new MemedToken(
-            token.name,
-            token.ticker,
-            token.creator,
-            address(memedFactory),
-            address(memedFactory.getMemedEngageToEarn()),
-            tokenAmount
-        );
 
-        MemedWarriorNFT memedWarriorNFT = new MemedWarriorNFT(
-            address(memedToken),
-            address(memedFactory),
-            memedFactory.getMemedBattle()
-        );
-        token.warriorNFT = address(memedWarriorNFT);
-
-        token.token = address(memedToken);
         fairLaunch.status = FairLaunchStatus.COMPLETED;
-        tokenIdByAddress[address(memedToken)] = _id;
         // Create Uniswap pair and add liquidity);
 
         (bool success, ) = payable(address(memedFactory)).call{value: fairLaunch.totalCommitted}("");
         require(success, "Transfer failed");
         
-        memedFactory.createUniswapLP(address(memedToken), fairLaunch.totalCommitted, tokenAmount);
         fairLaunch.status = FairLaunchStatus.COMPLETED;
-        memedFactory.completeFairLaunch(_id, address(memedToken), address(memedWarriorNFT));
-        emit FairLaunchCompleted(_id, address(memedToken), address(memedWarriorNFT), fairLaunch.totalCommitted);
+        (address memedToken, address pair) = memedFactory.completeFairLaunch(_id,tokenAmount, fairLaunch.totalCommitted);
+        fairLaunch.uniswapPair = pair;
+        tokenIdByAddress[memedToken] = _id;
+        emit FairLaunchCompleted(_id, memedToken, pair, fairLaunch.totalCommitted);
     }
 
     function sellTokens(uint256 _id, uint256 _amount) external nonReentrant {
@@ -315,9 +300,9 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
         if (fairLaunch.status != FairLaunchStatus.FAILED) {
             fairLaunch.status = FairLaunchStatus.FAILED;
             uint256 blockExpiry = block.timestamp + 30 days;
-            blockedCreators[memedFactory.getTokenById(_id).creator] = blockExpiry; // 30-day block
+            blockedCreators[memedFactory.getCreatorById(_id)] = blockExpiry; // 30-day block
             emit CreatorBlocked(
-                memedFactory.getTokenById(_id).creator,
+                memedFactory.getCreatorById(_id),
                 blockExpiry,
                 "Failed fair launch"
             );

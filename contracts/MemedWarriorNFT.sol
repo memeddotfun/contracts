@@ -51,11 +51,10 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
 
     constructor(
         address _memedToken,
-        address _factory,
         address _memedBattle
     ) ERC721("Memed Warrior", "WARRIOR") Ownable(msg.sender) {
         memedToken = _memedToken;
-        factory = IMemedFactory(_factory);
+        factory = IMemedFactory(msg.sender);
         memedBattle = MemedBattle(_memedBattle);
     }
     
