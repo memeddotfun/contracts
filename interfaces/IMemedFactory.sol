@@ -22,8 +22,8 @@ interface IMemedFactory {
     function getTokenById(uint256 _id) external view returns (TokenData memory);
     function getHeat(address _token) external view returns (uint256);
     function getWarriorNFT(address _token) external view returns (address);
-    function getTokenId(address _token) external view returns (uint256);
     function getMemedEngageToEarn() external view returns (address);
+    function getTokenId(address _token) external view returns (uint256);
     function getMemedBattle() external view returns (address);
     function completeFairLaunch(uint256 _id, uint256 _tokenAmount, uint256 _tokenBAmount) external returns (address, address);
     function owner() external view returns (address);

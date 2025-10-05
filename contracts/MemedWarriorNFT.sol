@@ -5,7 +5,9 @@ import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "./MemedBattle.sol";
+import "../interfaces/IMemedFactory.sol";
+import "../interfaces/IMemedBattle.sol";
+import "../interfaces/IMemedEngageToEarn.sol";
 
 contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
     // Base price and dynamic pricing constants from Memed.md specification
@@ -14,7 +16,7 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
     uint256 public constant HEAT_THRESHOLD = 10000; // 10,000 Heat Score threshold
     
     IMemedFactory public immutable factory;
-    MemedBattle public immutable memedBattle;
+    IMemedBattle public immutable memedBattle;
     address public immutable memedToken; // The main MEME token address
     
     uint256 public currentTokenId;
@@ -55,7 +57,7 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
     ) ERC721("Memed Warrior", "WARRIOR") Ownable(msg.sender) {
         memedToken = _memedToken;
         factory = IMemedFactory(msg.sender);
-        memedBattle = MemedBattle(_memedBattle);
+        memedBattle = IMemedBattle(_memedBattle);
     }
     
     /**
@@ -128,13 +130,13 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
      * @dev Get back the warrior NFTs to the user if they win the battle
      */
     function getBackWarrior(uint256 _battleId) external {
-        MemedBattle.Battle memory battle = memedBattle.getBattle(_battleId);
+        Battle memory battle = memedBattle.getBattle(_battleId);
         require(battle.winner == memedToken, "Not the winner");
-        MemedBattle.UserBattleAllocation memory allocation = memedBattle.getBattleAllocations(_battleId, msg.sender, memedToken);
+        UserBattleAllocation memory allocation = memedBattle.getBattleAllocations(_battleId, msg.sender, memedToken);
         require(allocation.nftsIds.length > 0, "No allocation found");
         memedBattle.getBackWarrior(_battleId, msg.sender);
         for (uint256 i = 0; i < allocation.nftsIds.length; i++) {
-            if(factory.getMemedEngageToEarn().getUserEngagementReward(msg.sender, memedToken) > 0) {
+            if(IMemedEngageToEarn(factory.getMemedEngageToEarn()).getUserEngagementReward(msg.sender, memedToken) > 0) {
                 continue;
             }
             warriors[allocation.nftsIds[i]].allocated = false;
