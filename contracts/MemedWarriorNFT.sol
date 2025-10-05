@@ -8,6 +8,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "../interfaces/IMemedFactory.sol";
 import "../interfaces/IMemedBattle.sol";
 import "../interfaces/IMemedEngageToEarn.sol";
+import "../structs/WarriorStructs.sol";
 
 contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
     // Base price and dynamic pricing constants from Memed.md specification
@@ -22,13 +23,6 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
     uint256 public currentTokenId;
 
     // NFT data structure
-    struct WarriorData {
-        uint256 tokenId;
-        address owner;
-        uint256 mintPrice;
-        uint256 mintedAt;
-        bool allocated;
-    }
     
     mapping(uint256 => WarriorData) public warriors;
     mapping(address => uint256[]) public userNFTs; // Track user's NFTs

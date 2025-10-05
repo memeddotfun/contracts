@@ -10,6 +10,7 @@ import "./MemedBattle.sol";
 import "../interfaces/IUniswapV2.sol";
 import "../interfaces/IMemedTokenSale.sol";
 import "../interfaces/IMemedEngageToEarn.sol";
+import "../structs/FactoryStructs.sol";
 
 contract MemedFactory is Ownable, ReentrancyGuard {
     uint256 public constant REWARD_PER_ENGAGEMENT = 100000;
@@ -28,25 +29,8 @@ contract MemedFactory is Ownable, ReentrancyGuard {
     MemedBattle public memedBattle;
     IMemedEngageToEarn public memedEngageToEarn;
 
-    struct TokenData {
-        address token;
-        address warriorNFT;
-        address creator;
-        string name;
-        string ticker;
-        string description;
-        string image;
-        uint256 lastRewardAt;
-        uint256 creatorIncentivesUnlocksAt;
-        uint256 creatorIncentivesUnlockedAt;
-        uint256 lastEngagementBoost;
-        uint256 heat;
-        uint256 lastHeatUpdate;
-        bool isClaimedByCreator;
-        uint256 createdAt;
-    }
-
     mapping(uint256 => TokenData) public tokenData;
+    mapping(uint256 => TokenRewardData) public tokenRewardData;
     address[] public tokens;
     IUniswapV2Router02 public uniswapV2Router;
     IUniswapV2Factory public uniswapV2Factory;
@@ -112,7 +96,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         token.description = _description;
         token.image = _image;
         token.isClaimedByCreator = _creator == address(0);
-        token.creatorIncentivesUnlocksAt = INITIAL_REWARDS_PER_HEAT;
+        tokenRewardData[id].lastRewardAt = INITIAL_REWARDS_PER_HEAT;
         emit TokenCreated(
             token.token,
             token.creator,
@@ -134,7 +118,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         require(!token.isClaimedByCreator, "Already claimed by creator");
         require(!memedTokenSale.isMintable(_creator), "Creator already has a token");
         token.isClaimedByCreator = true;
-        token.creatorIncentivesUnlockedAt = token.heat;
+        tokenRewardData[memedTokenSale.tokenIdByAddress(_token)].lastRewardAt = tokenRewardData[memedTokenSale.tokenIdByAddress(_token)].heat;
         MemedToken(token.token).claim(
             token.creator,
             (memedTokenSale.INITIAL_SUPPLY() * 5) / 100
@@ -145,39 +129,40 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         for (uint i = 0; i < _heatUpdates.length; i++) {
             TokenData memory token = getTokenByAddress(_heatUpdates[i].token);
             require(token.token != address(0), "Token not created");
+            TokenRewardData memory tokenReward = tokenRewardData[memedTokenSale.tokenIdByAddress(_heatUpdates[i].token)];
             require(
-                block.timestamp >= token.lastHeatUpdate + 1 days,
+                block.timestamp >= tokenReward.lastRewardAt + 1 days,
                 "Heat update too frequent"
             );
 
-            token.lastHeatUpdate = block.timestamp;
-            token.lastEngagementBoost = _heatUpdates[i].heat;
-            token.heat +=
+            tokenReward.lastRewardAt = block.timestamp;
+            tokenReward.lastRewardAt = _heatUpdates[i].heat;
+            tokenReward.heat +=
                 _heatUpdates[i].heat -
-                token.lastEngagementBoost;
+                tokenReward.lastRewardAt;
 
             if (
-                (token.heat - token.lastRewardAt) >=
+                (tokenReward.heat - tokenReward.lastRewardAt) >=
                 ENGAGEMENT_REWARDS_PER_NEW_HEAT &&
                 memedEngageToEarn.isRewardable(token.token)
             ) {
                 memedEngageToEarn.registerEngagementReward(token.token);
-                token.lastRewardAt = token.heat;
+                tokenReward.lastRewardAt = tokenReward.heat;
             }
 
             if (
                 token.isClaimedByCreator &&
-                token.heat - token.creatorIncentivesUnlockedAt >=
-                token.creatorIncentivesUnlocksAt &&
+                tokenReward.heat - tokenReward.creatorIncentivesUnlockedAt >=
+                tokenReward.creatorIncentivesUnlocksAt &&
                 MemedToken(token.token).isRewardable()
             ) {
-                token.creatorIncentivesUnlockedAt = token.heat;
+                tokenReward.creatorIncentivesUnlockedAt = tokenReward.heat;
                 MemedToken(token.token).unlockCreatorIncentives();
             }
 
             emit HeatUpdated(
                 _heatUpdates[i].token,
-                token.heat,
+                tokenReward.heat,
                 block.timestamp
             );
         }
@@ -185,8 +170,8 @@ contract MemedFactory is Ownable, ReentrancyGuard {
 
     function battleUpdate(address _winner, address _loser) external {
         require(msg.sender == address(memedBattle), "unauthorized");
-        TokenData memory token = getTokenByAddress(_winner);
-        TokenData memory tokenLoser = getTokenByAddress(_loser);
+        TokenRewardData memory token = tokenRewardData[memedTokenSale.tokenIdByAddress(_winner)];
+        TokenRewardData memory tokenLoser = tokenRewardData[memedTokenSale.tokenIdByAddress(_loser)];
         token.creatorIncentivesUnlocksAt =
             token.creatorIncentivesUnlocksAt -
             ((token.creatorIncentivesUnlocksAt * BATTLE_REWARDS_PERCENTAGE) /
@@ -281,7 +266,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
 
 
     function getHeat(address _token) external view returns (uint256) {
-        return tokenData[memedTokenSale.tokenIdByAddress(_token)].heat;
+        return tokenRewardData[memedTokenSale.tokenIdByAddress(_token)].heat;
     }
 
     function getTokenByAddress(address _token) public view returns (TokenData memory) {

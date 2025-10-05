@@ -3,6 +3,7 @@ pragma solidity ^0.8.28;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "../structs/TokenStructs.sol";
 
 contract MemedToken is ERC20, Ownable {
     uint256 public immutable MAX_SUPPLY;
@@ -17,11 +18,6 @@ contract MemedToken is ERC20, Ownable {
     address public engageToEarnContract;
     address public factoryContract;
     
-    struct CreatorData {
-        address creator;
-        uint256 balance;
-        uint256 unlockedBalance;
-    }
 
     CreatorData public creatorData;
 

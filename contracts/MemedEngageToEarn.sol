@@ -7,6 +7,8 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "../interfaces/IMemedWarriorNFT.sol";
 import "../interfaces/IMemedFactory.sol";
 import "../interfaces/IMemedBattle.sol";
+import "../structs/BattleStructs.sol";
+import "../structs/EngageToEarnStructs.sol";
 
 contract MemedEngageToEarn is Ownable {
     constructor() Ownable(msg.sender) {}
@@ -17,12 +19,6 @@ contract MemedEngageToEarn is Ownable {
     uint256 public constant ENGAGEMENT_REWARDS_CHANGE = 100 *1e18; // engagement rewards change per battle
     IMemedFactory public factory;
     uint256 public engagementRewardId;
-    struct EngagementReward {
-        address token;
-        uint256 amountClaimed;
-        uint256 nftPrice;
-        uint256 timestamp;
-    }
 
     mapping(uint256 => EngagementReward) public engagementRewards;
     mapping(address => uint256) public totalClaimed;

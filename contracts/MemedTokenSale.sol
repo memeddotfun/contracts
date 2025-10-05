@@ -5,6 +5,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "../interfaces/IMemedFactory.sol";
+import "../structs/TokenSaleStructs.sol";
 
 contract MemedTokenSale is Ownable, ReentrancyGuard {
 
@@ -20,30 +21,6 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
     uint256 public feeDenominator = 1000; // For 1% fee calculation
     IMemedFactory public memedFactory;
 
-    enum FairLaunchStatus {
-        NOT_STARTED,
-        ACTIVE,
-        COMPLETED,
-        FAILED
-    }
-
-    struct Commitment {
-        uint256 amount;
-        uint256 tokenAmount;
-        bool claimed;
-        bool refunded;
-    }
-
-    struct FairLaunchData {
-        FairLaunchStatus status;
-        uint256 fairLaunchStartTime;
-        uint256 totalCommitted;
-        uint256 totalSold;
-        address uniswapPair;
-        mapping(address => Commitment) commitments;
-        mapping(address => uint256) balance;
-        uint256 createdAt;
-    }
 
     uint256 public id;
 
