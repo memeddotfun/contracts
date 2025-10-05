@@ -4,50 +4,10 @@ pragma solidity ^0.8.28;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-
-
-interface IMemedWarriorNFT {
-    function memedToken() external view returns (address);
-    function getCurrentPrice() external view returns (uint256);
-}
-
-interface IMemedEngageToEarn {
-    function getUserEngagementReward(address _user, address _token) external view returns (uint256);
-    function isRewardable(address _token) external view returns (bool);
-    function registerEngagementReward(address _token) external;
-    function getBattleRewardPool(address _token) external view returns (uint256);
-    function transferBattleRewards(address _loser, address _winner, uint256 _amount) external returns (uint256);
-    function claimBattleRewards(address _token, address _winner, uint256 _amount) external;
-}
-
-interface IMemedFactory {
-    struct TokenData {
-        address token;
-        address warriorNFT;
-        address creator;
-        bool isClaimedByCreator;
-        string name;
-        string ticker;
-        string description;
-        string image;
-        string lensUsername;
-        uint256 lastRewardAt;
-        uint256 createdAt;
-    }
-    
-    function getByToken(address _token) external view returns (TokenData memory);
-    function updateHeat(address _token, uint256 _heat) external;
-    function swap(uint256 _amount, address[] calldata _path, address _to) external returns (uint[] memory amounts);
-    function getTokenById(uint256 _id) external view returns (TokenData memory);
-    function getHeat(address _token) external view returns (uint256);
-    function getWarriorNFT(address _token) external view returns (address);
-    function getTokenId(address _token) external view returns (uint256);
-    function getMemedEngageToEarn() external view returns (IMemedEngageToEarn);
-    function getMemedBattle() external view returns (address);
-    function completeFairLaunch(uint256 _id, uint256 _tokenAmount, uint256 _tokenBAmount) external returns (address, address);
-    function owner() external view returns (address);
-    function battleUpdate(address _winner, address _loser) external;
-}
+import "../interfaces/IMemedWarriorNFT.sol";
+import "../interfaces/IMemedEngageToEarn.sol";
+import "../interfaces/IMemedFactory.sol";
+import "../interfaces/IMemedBattle.sol";
 
 struct HeatUpdate {
     address token;
@@ -95,10 +55,6 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         bool getBack;
     }
 
-    struct TokenBattleAllocation {
-        uint256 winCount;
-        uint256 loseCount;
-    }
     struct UserNftBattleAllocation {
         address supportedMeme;
         uint256 battleId;
@@ -265,9 +221,9 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         
         
         // Winner receives 5% of engagement rewards pool (swapped to winner's token)
-        uint256 battleRewardAmount = factory.getMemedEngageToEarn().getBattleRewardPool(actualWinner);
+        uint256 battleRewardAmount = IMemedEngageToEarn(factory.getMemedEngageToEarn()).getBattleRewardPool(actualWinner);
         if (battleRewardAmount > 0) {
-            uint256 reward = factory.getMemedEngageToEarn().transferBattleRewards(actualLoser, actualWinner, battleRewardAmount);
+            uint256 reward = IMemedEngageToEarn(factory.getMemedEngageToEarn()).transferBattleRewards(actualLoser, actualWinner, battleRewardAmount);
             battle.totalReward = reward;
         }
         
@@ -293,7 +249,7 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         require(battle.status == BattleStatus.RESOLVED, "Battle not resolved");
         uint256 reward = battle.totalReward * battleAllocations[_battleId][msg.sender][battle.winner].nftsIds.length / (battle.winner == battle.memeA ? battle.memeANftsAllocated : battle.memeBNftsAllocated);
         require(reward > 0, "No reward to claim");
-        factory.getMemedEngageToEarn().claimBattleRewards(battle.memeA, msg.sender, reward);
+        IMemedEngageToEarn(factory.getMemedEngageToEarn()).claimBattleRewards(battle.memeA, msg.sender, reward);
         battleAllocations[_battleId][msg.sender][battle.winner].claimed = true;
         emit BattleRewardsClaimed(_battleId, msg.sender, reward);
     }

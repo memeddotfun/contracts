@@ -4,11 +4,7 @@ pragma solidity ^0.8.28;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-
-interface IMemedFactory {
-    function completeFairLaunch(uint256 _id, uint256 _tokenAmount, uint256 _tokenBAmount) external returns (address, address);
-    function getCreatorById(uint256 _id) external view returns (address);
-}
+import "../interfaces/IMemedFactory.sol";
 
 contract MemedTokenSale is Ownable, ReentrancyGuard {
 

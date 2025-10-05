@@ -4,30 +4,9 @@ pragma solidity ^0.8.28;
 import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-
-interface IMemedWarriorNFT {
-    function hasActiveWarrior(address user) external view returns (bool);
-    function getUserActiveNFTs(address user) external view returns (uint256[] memory);
-    function getCurrentPrice() external view returns (uint256);
-    function getWarriorMintedBeforeByUser(address _user, uint256 _timestamp) external view returns (uint256);
-}
-
-struct TokenBattleAllocation {
-    uint256 winCount;
-    uint256 loseCount;
-}
-
-interface IMemedFactory {
-    function getWarriorNFT(address _token) external view returns (address);
-    function getMemedBattle() external view returns (address);
-    function swap(uint256 _amount, address[] calldata _path, address _to) external returns (uint256[] memory);
-}
-
-interface IMemedBattle {
-    function tokenBattleAllocations(address _token) external view returns (TokenBattleAllocation memory);
-    function getUserTokenBattleAllocations(uint256 _tokenId, uint256 _until) external view returns (TokenBattleAllocation memory);
-    function tokenAllocations(address _user) external view returns (uint256[] memory);
-}
+import "../interfaces/IMemedWarriorNFT.sol";
+import "../interfaces/IMemedFactory.sol";
+import "../interfaces/IMemedBattle.sol";
 
 contract MemedEngageToEarn is Ownable {
     constructor() Ownable(msg.sender) {}
