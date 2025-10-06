@@ -2,17 +2,12 @@ import type { HardhatUserConfig } from "hardhat/config";
 
 import hardhatToolboxViemPlugin from "@nomicfoundation/hardhat-toolbox-viem";
 import hardhatVerifyPlugin from "@nomicfoundation/hardhat-verify";
-import hardhatKeystorePlugin from "@nomicfoundation/hardhat-keystore";
-import { configVariable } from "hardhat/config";
+import "dotenv/config";
 
-
-const WALLET_KEY = configVariable("WALLET_KEY");
-const ALCHEMY_API_KEY = configVariable("ALCHEMY_API_KEY");
-const ETHERSCAN_API_KEY = configVariable("ETHERSCAN_API_KEY");
-
+const { ALCHEMY_API_KEY, WALLET_KEY, ETHERSCAN_API_KEY } = process.env;
 
 const config: HardhatUserConfig = {
-  plugins: [hardhatToolboxViemPlugin, hardhatKeystorePlugin, hardhatVerifyPlugin],
+  plugins: [hardhatToolboxViemPlugin, hardhatVerifyPlugin],
   solidity: {
     version: "0.8.28",
   },

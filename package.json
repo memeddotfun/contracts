@@ -6,8 +6,8 @@
     "compile": "npx hardhat compile",
     "deploy:sepolia": "npx hardhat run scripts/deploy.ts --network baseSepolia && yarn verify:sepolia",
     "deploy:base": "npx hardhat run scripts/deploy.ts --network base && yarn verify:base",
-    "deploy:token": "npx hardhat ignition deploy ./ignition/modules/Token.ts --network baseSepolia --parameters ignition/parameters.json --verify --force",
-    "deploy:warrior": "npx hardhat ignition deploy ./ignition/modules/WarriorNFT.ts --network baseSepolia --parameters ignition/parameters.json --verify --force",
+    "deploy:token": "npx hardhat ignition deploy ./ignition/modules/Token.ts --network baseSepolia --parameters ignition/parameters.json --verify --reset",
+    "deploy:warrior": "npx hardhat ignition deploy ./ignition/modules/WarriorNFT.ts --network baseSepolia --parameters ignition/parameters.json --verify --reset",
     "verify:sepolia": "npx hardhat ignition verify chain-84532 --network baseSepolia",
     "verify:base": "npx hardhat ignition verify chain-8453 --network base"
   },
@@ -23,6 +23,7 @@
     "@nomicfoundation/hardhat-viem-assertions": "^3.0.2",
     "@openzeppelin/contracts": "^5.4.0",
     "@types/node": "^22.18.6",
+    "dotenv": "^17.2.3",
     "forge-std": "github:foundry-rs/forge-std#v1.9.4",
     "hardhat": "^3.0.6",
     "typescript": "~5.8.0",
