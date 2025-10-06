@@ -44,6 +44,11 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
         uint256 amount
     );
 
+    event FairLaunchReadyToComplete(
+        uint256 indexed id,
+        uint256 totalRaised
+    );
+
     event FairLaunchCompleted(
         uint256 indexed id,
         address indexed token,
@@ -89,6 +94,11 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
 
 
     constructor() Ownable(msg.sender) {}
+
+    modifier onlyFactory() {
+        require(msg.sender == address(memedFactory), "Only factory can call this function");
+        _;
+    }
 
     function startFairLaunch(
         address _creator
@@ -189,11 +199,17 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
         (bool success, ) = payable(address(memedFactory)).call{value: fairLaunch.totalCommitted}("");
         require(success, "Transfer failed");
         
+        fairLaunch.status = FairLaunchStatus.READY_TO_COMPLETE;
+        emit FairLaunchReadyToComplete(_id, fairLaunch.totalCommitted);
+    }
+
+    function completeFairLaunch(uint256 _id, address _token, address _pair) external onlyFactory {
+        FairLaunchData storage fairLaunch = fairLaunchData[_id];
+        require(fairLaunch.status == FairLaunchStatus.READY_TO_COMPLETE, "Fair launch not ready to complete");
         fairLaunch.status = FairLaunchStatus.COMPLETED;
-        (address memedToken, address pair) = memedFactory.completeFairLaunch(_id,tokenAmount, fairLaunch.totalCommitted);
-        fairLaunch.uniswapPair = pair;
-        tokenIdByAddress[memedToken] = _id;
-        emit FairLaunchCompleted(_id, memedToken, pair, fairLaunch.totalCommitted);
+        fairLaunch.uniswapPair = _pair;
+        tokenIdByAddress[_token] = _id;
+        emit FairLaunchCompleted(_id, _token, _pair, fairLaunch.totalCommitted);
     }
 
     function sellTokens(uint256 _id, uint256 _amount) external nonReentrant {
@@ -309,6 +325,11 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
         }
         FairLaunchData storage fairLaunch = fairLaunchData[tokenId];
         return fairLaunch.status == FairLaunchStatus.ACTIVE;
+    }
+
+    function getFairLaunchData(uint256 _id) public view returns (FairLaunchStatus, uint256) {
+        FairLaunchData storage fairLaunch = fairLaunchData[_id];
+        return (fairLaunch.status, fairLaunch.totalCommitted);
     }
 
     function _tokenExists(address _creator) internal view returns (bool) {

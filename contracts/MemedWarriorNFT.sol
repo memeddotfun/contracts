@@ -47,10 +47,11 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
 
     constructor(
         address _memedToken,
-        address _memedBattle
+        address _memedBattle,
+        address _factory
     ) ERC721("Memed Warrior", "WARRIOR") Ownable(msg.sender) {
         memedToken = _memedToken;
-        factory = IMemedFactory(msg.sender);
+        factory = IMemedFactory(_factory);
         memedBattle = IMemedBattle(_memedBattle);
     }
     
@@ -123,7 +124,7 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
     /** Get back the warrior NFTs to the user if they win the battle
      * @dev Get back the warrior NFTs to the user if they win the battle
      */
-    function getBackWarrior(uint256 _battleId) external {
+    function getBackWarrior(uint128 _battleId) external {
         Battle memory battle = memedBattle.getBattle(_battleId);
         require(battle.winner == memedToken, "Not the winner");
         UserBattleAllocation memory allocation = memedBattle.getBattleAllocations(_battleId, msg.sender, memedToken);
@@ -137,7 +138,7 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
         }
     }
 
-    function allocateNFTsToBattle(uint256 _battleId, address _user, address _supportedMeme, uint256[] calldata _nftsIds) external {
+    function allocateNFTsToBattle(uint128 _battleId, address _user, address _supportedMeme, uint256[] calldata _nftsIds) external {
         for (uint256 i = 0; i < _nftsIds.length; i++) {
             _allocateWarrior(_nftsIds[i]);
         }

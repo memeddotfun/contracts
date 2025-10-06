@@ -13,7 +13,9 @@ const ETHERSCAN_API_KEY = configVariable("ETHERSCAN_API_KEY");
 
 const config: HardhatUserConfig = {
   plugins: [hardhatToolboxViemPlugin, hardhatKeystorePlugin, hardhatVerifyPlugin],
-  solidity: "0.8.28",
+  solidity: {
+    version: "0.8.28",
+  },
   networks: {
     base: {
       type: "http",
@@ -23,7 +25,7 @@ const config: HardhatUserConfig = {
     },
     baseSepolia: {
       type: "http",
-      url: `https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
+      url: `https://sepolia.base.org`,
       accounts: [WALLET_KEY || ""],
       chainId: 84532,
     },

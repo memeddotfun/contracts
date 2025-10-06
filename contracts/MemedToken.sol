@@ -10,11 +10,12 @@ contract MemedToken is ERC20, Ownable {
     
     // Token distribution according to Memed.fun v2.3 tokenomics
     uint256 public constant FAIR_LAUNCH_ALLOCATION = 200000000 * 1e18; // 200M (20%)
+    uint256 public immutable LP_ALLOCATION;
     uint256 public constant ENGAGEMENT_REWARDS_ALLOCATION = 350000000 * 1e18; // 350M (35%)
     uint256 public constant CREATOR_INCENTIVES_ALLOCATION = 150000000 * 1e18; // 150M (15%)
     uint256 public constant CREATOR_INITIAL_ALLOCATION = 50000000 * 1e18; // 50M (5%)
     uint256 public constant CREATOR_INITIAL_ALLOCATION_PER_UNLOCK = 2000000 * 1e18; // 2M tokens
-
+    bool public isLpAllocated;
     address public engageToEarnContract;
     address public factoryContract;
     
@@ -23,20 +24,22 @@ contract MemedToken is ERC20, Ownable {
 
     event CreatorIncentivesUnlocked(uint256 amount);
     event CreatorIncentivesClaimed(uint256 amount);
+    event LpAllocated(uint256 amount);
     
     constructor(
         string memory _name,
         string memory _ticker,
         address _creator,
+        address _factoryContract,
         address _engageToEarnContract,
         uint256 _lpSupply
     ) ERC20(_name, _ticker) Ownable(msg.sender) {
         creatorData.creator = _creator; 
         creatorData.balance = CREATOR_INCENTIVES_ALLOCATION * 70 / 100;
-        factoryContract = msg.sender;
+        factoryContract = _factoryContract;
         engageToEarnContract = _engageToEarnContract;
         MAX_SUPPLY = 700000000 * 1e18 + _lpSupply;
-        _mint(factoryContract, _lpSupply);
+        LP_ALLOCATION = _lpSupply;
         _mint(engageToEarnContract, ENGAGEMENT_REWARDS_ALLOCATION);
         if(_creator != address(0)) {
             _mint(_creator, CREATOR_INITIAL_ALLOCATION);
@@ -67,6 +70,13 @@ contract MemedToken is ERC20, Ownable {
 
     function isRewardable() external view returns (bool) {
         return creatorData.balance > CREATOR_INITIAL_ALLOCATION_PER_UNLOCK;
+    }
+
+    function allocateLp() external onlyFactory {
+        require(!isLpAllocated, "Lp already allocated");
+        _mint(factoryContract, LP_ALLOCATION);
+        isLpAllocated = true;
+        emit LpAllocated(LP_ALLOCATION);
     }
 
     function claim(address to, uint256 amount) external onlyFactory {

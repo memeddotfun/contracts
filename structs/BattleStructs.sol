@@ -14,11 +14,11 @@ struct TokenBattleAllocation {
 }
 
 struct Battle {
-    uint256 battleId;
+    uint128 battleId;
     address memeA;
     address memeB;
-    uint256 memeANftsAllocated;
-    uint256 memeBNftsAllocated;
+    uint128 memeANftsAllocated;
+    uint128 memeBNftsAllocated;
     uint256 heatA;
     uint256 heatB;
     uint256 startTime;
@@ -29,7 +29,7 @@ struct Battle {
 }
 
 struct UserBattleAllocation {
-    uint256 battleId;
+    uint128 battleId;
     address user;
     address supportedMeme;
     uint256[] nftsIds;
@@ -39,7 +39,7 @@ struct UserBattleAllocation {
 
 struct UserNftBattleAllocation {
     address supportedMeme;
-    uint256 battleId;
+    uint128 battleId;
 }
 
 struct BattleCooldown {

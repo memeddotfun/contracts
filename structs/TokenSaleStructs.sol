@@ -4,6 +4,7 @@ pragma solidity ^0.8.28;
 enum FairLaunchStatus {
     NOT_STARTED,
     ACTIVE,
+    READY_TO_COMPLETE,
     COMPLETED,
     FAILED
 }
