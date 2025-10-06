@@ -46,6 +46,7 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
 
     event FairLaunchReadyToComplete(
         uint256 indexed id,
+        uint256 lpSupply,
         uint256 totalRaised
     );
 
@@ -200,7 +201,7 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
         require(success, "Transfer failed");
         
         fairLaunch.status = FairLaunchStatus.READY_TO_COMPLETE;
-        emit FairLaunchReadyToComplete(_id, fairLaunch.totalCommitted);
+        emit FairLaunchReadyToComplete(_id, fairLaunch.totalCommitted, tokenAmount);
     }
 
     function completeFairLaunch(uint256 _id, address _token, address _pair) external onlyFactory {
