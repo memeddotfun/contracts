@@ -1,0 +1,16 @@
+{
+    "TokenModule": {
+      "name": "Saturn V",
+      "ticker": "SATURN",
+      "creator": "0x35134987bB541607Cd45e62Dd1feA4F587607817",
+      "factoryContract": "0x35134987bB541607Cd45e62Dd1feA4F587607817",
+      "engageToEarnContract": "0x35134987bB541607Cd45e62Dd1feA4F587607817",
+      "lpSupply": "1000000000000000000000000000"
+    },
+    "WarriorNFTModule": {
+      "token": "0x35134987bB541607Cd45e62Dd1feA4F587607817",
+      "battle": "0x35134987bB541607Cd45e62Dd1feA4F587607817",
+      "factory": "0x35134987bB541607Cd45e62Dd1feA4F587607817"
+    }
+  }
+  

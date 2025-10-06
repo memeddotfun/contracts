@@ -6,6 +6,8 @@
     "compile": "npx hardhat compile",
     "deploy:sepolia": "npx hardhat run scripts/deploy.ts --network baseSepolia && yarn verify:sepolia",
     "deploy:base": "npx hardhat run scripts/deploy.ts --network base && yarn verify:base",
+    "deploy:token": "npx hardhat ignition deploy ./ignition/modules/Token.ts --network baseSepolia --parameters ignition/parameters.json --verify --force",
+    "deploy:warrior": "npx hardhat ignition deploy ./ignition/modules/WarriorNFT.ts --network baseSepolia --parameters ignition/parameters.json --verify --force",
     "verify:sepolia": "npx hardhat ignition verify chain-84532 --network baseSepolia",
     "verify:base": "npx hardhat ignition verify chain-8453 --network base"
   },
