@@ -86,19 +86,19 @@ contract MemedEngageToEarn is Ownable {
      * @dev Swap tokens to winner (called by battle contract)
      */
     function transferBattleRewards(address _loser, address _winner, uint256 _amount) external returns (uint256) {
-        require(msg.sender == address(factory), "Only factory can transfer battle rewards");
+        require(msg.sender == IMemedBattle(factory.getMemedBattle()).getResolver(), "Only resolver can transfer battle rewards");
         require(IERC20(_loser).balanceOf(address(this)) >= _amount, "Insufficient balance");
         IERC20(_loser).transfer(address(factory), _amount);
         address[] memory path = new address[](2);
         path[0] = _loser;
         path[1] = _winner;
-        uint256[] memory amounts = factory.swap(_amount, path, _winner);
+        uint256[] memory amounts = factory.swap(_amount, path, address(this));
         require(amounts[1] > 0, "Swap failed");
         return amounts[1];
     }
 
     function claimBattleRewards(address _token, address _winner, uint256 _amount) external {
-        require(msg.sender == address(factory), "Only factory can transfer battle rewards");
+        require(msg.sender == factory.getMemedBattle(), "Only battle can transfer battle rewards");
         require(IERC20(_token).balanceOf(address(this)) >= _amount, "Insufficient balance");
         IERC20(_token).transfer(_winner, _amount);
     }

@@ -14,17 +14,20 @@ interface IMemedBattle {
     function tokenAllocations(
         address _user
     ) external view returns (uint256[] memory);
-    function getBattle(uint128 _battleId) external view returns (Battle memory);
+    function getBattle(uint256 _battleId) external view returns (Battle memory);
     function getBattleAllocations(
-        uint128 _battleId,
+        uint256 _battleId,
         address _user,
         address _meme
     ) external view returns (UserBattleAllocation memory);
-    function getBackWarrior(uint128 _battleId, address _user) external;
+    function getBackWarrior(uint256 _battleId, address _user) external;
     function allocateNFTsToBattle(
-        uint128 _battleId,
+        uint256 _battleId,
         address _user,
         address _supportedMeme,
         uint256[] calldata _nftsIds
     ) external;
+    function getFactory() external view returns (address);
+    function getResolver() external view returns (address);
+    function resolveBattle(uint256 _battleId, address _actualWinner, uint256 _totalReward) external;
 }

@@ -4,6 +4,7 @@ import hre from "hardhat";
 import path from "node:path";
 import factoryModule from "../ignition/modules/Factory.js";
 import battleModule from "../ignition/modules/Battle.js";
+import battleResolverModule from "../ignition/modules/BattleResolver.js";
 import engageToEarnModule from "../ignition/modules/EngageToEarn.js";
 import tokenSaleModule from "../ignition/modules/TokenSale.js";
 
@@ -12,9 +13,17 @@ async function main() {
   
   const uniswapV2Router = id === 0 ? "0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4" : "0x2626664c2603336E57B271c5C0b26F421741e481";
   const { battle } = await ignition.deploy(battleModule);
+  const { battleResolver } = await ignition.deploy(battleResolverModule, {
+    parameters: {
+      BattleResolverModule: {
+        battle: battle.address,
+      },
+    },
+  });
   const { engageToEarn } = await ignition.deploy(engageToEarnModule);
   const { tokenSale } = await ignition.deploy(tokenSaleModule);
   const memedBattleAddress = battle.address;
+  const memedBattleResolverAddress = battleResolver.address;
   const memedEngageToEarnAddress = engageToEarn.address;
   const memedTokenSaleAddress = tokenSale.address;
   const { factory } = await ignition.deploy(factoryModule, {
@@ -30,6 +39,7 @@ async function main() {
   const config = {
     factory: factory.address,
     memedBattle: memedBattleAddress,
+    memedBattleResolver: memedBattleResolverAddress,
     memedEngageToEarn: memedEngageToEarnAddress,
     memedTokenSale: memedTokenSaleAddress,
   };
@@ -38,8 +48,8 @@ async function main() {
   writeFileSync(path.resolve("../backend/src/config/config.json"), JSON.stringify(config, null, 2));
 
   // Set factory address in the previously deployed contracts
-  console.log("Setting factory address in MemedBattle...");
-  await battle.write.setFactory([config.factory]);
+  console.log("Setting factory and resolver address in MemedBattle...");
+  await battle.write.setFactoryAndResolver([config.factory, config.memedBattleResolver]);
   
   console.log("Setting factory address in MemedEngageToEarn...");
   await engageToEarn.write.setFactory([config.factory]);

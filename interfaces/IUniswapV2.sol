@@ -30,4 +30,17 @@ interface IUniswapV2Router02 {
         address to,
         uint deadline
     ) external returns (uint[] memory amounts);
+
+ function addLiquidity(
+        address tokenA,
+        address tokenB,
+        uint amountADesired,
+        uint amountBDesired,
+        uint amountTokenMin,
+        uint amountTokenBMin,
+        address to,
+        uint deadline
+    )
+        external
+        returns (uint amountToken, uint amountTokenB, uint liquidity);
 }

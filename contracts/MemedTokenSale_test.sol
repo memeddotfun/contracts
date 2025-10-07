@@ -7,9 +7,10 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "../interfaces/IMemedFactory.sol";
 import "../structs/TokenSaleStructs.sol";
 
-contract MemedTokenSale is Ownable, ReentrancyGuard {
+contract MemedTokenSale_test is Ownable, ReentrancyGuard {
 
     // Bonding curve parameters
+    address public constant MEMED_TEST_ETH = 0xc190e6F26cE14e40D30251fDe25927A73a5D58b6;
     uint256 public constant FAIR_LAUNCH_DURATION = 30 days;
     uint256 public INITIAL_SUPPLY = 1000000000 * 1e18; // 1B token
     uint256 public constant DECIMALS = 1e18;
@@ -128,7 +129,7 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
         return id;
     }
 
-    function commitToFairLaunch(uint256 _id) external payable nonReentrant {
+    function commitToFairLaunch(uint256 _id, uint256 _amount) external nonReentrant {
         FairLaunchData storage fairLaunch = fairLaunchData[_id];
         require(
             fairLaunch.status == FairLaunchStatus.ACTIVE,
@@ -139,11 +140,11 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
                 fairLaunch.fairLaunchStartTime + FAIR_LAUNCH_DURATION,
             "Fair launch ended"
         );
-        require(msg.value > 0, "Must send ETH");
-
+        require(_amount > 0, "Must send ETH");
+        IERC20(MEMED_TEST_ETH).transferFrom(msg.sender, address(this), _amount);
         // Calculate platform fee (1%)
-        uint256 platformFee = (msg.value * platformFeePercentage) / feeDenominator;
-        uint256 ethAfterFee = msg.value - platformFee;
+        uint256 platformFee = (_amount * platformFeePercentage) / feeDenominator;
+        uint256 ethAfterFee = _amount - platformFee;
 
         uint256 tokenAmount = getNativeToTokenAmount(_id, ethAfterFee);
         require(tokenAmount > 0, "Insufficient ETH");
@@ -154,8 +155,7 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
 
         // Send platform fee to owner
         if (platformFee > 0) {
-            (bool feeSuccess, ) = payable(owner()).call{value: platformFee}("");
-            require(feeSuccess, "Fee transfer failed");
+            IERC20(MEMED_TEST_ETH).transfer(owner(), platformFee);
             emit PlatformFeeCollected(_id, msg.sender, platformFee, "buy");
         }
 
@@ -167,7 +167,7 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
         fairLaunch.totalCommitted += ethAfterFee; // Track committed amount after fee
         fairLaunch.balance[msg.sender] += tokenAmount;
 
-        emit CommitmentMade(_id, msg.sender, msg.value);
+        emit CommitmentMade(_id, msg.sender, _amount);
 
         // Check if we can launch early
         if (fairLaunch.totalCommitted >= TARGET_ETH_WEI) {
@@ -228,14 +228,13 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
         uint256 ethToUser = ethValue - platformFee;
 
         require(
-            address(this).balance >= ethValue,
+            IERC20(MEMED_TEST_ETH).balanceOf(address(this)) >= ethValue,
             "Insufficient ETH in contract"
         );
 
         // Send platform fee to owner
         if (platformFee > 0) {
-            (bool feeSuccess, ) = payable(owner()).call{value: platformFee}("");
-            require(feeSuccess, "Fee transfer failed");
+            IERC20(MEMED_TEST_ETH).transfer(owner(), platformFee);
             emit PlatformFeeCollected(_id, msg.sender, platformFee, "sell");
         }
 
@@ -243,8 +242,7 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
         fairLaunch.totalSold -= _amount;
         fairLaunch.totalCommitted -= ethValue;
 
-        (bool success, ) = payable(msg.sender).call{value: ethToUser}("");
-        require(success, "Transfer failed");
+        IERC20(MEMED_TEST_ETH).transfer(msg.sender, ethToUser);
 
         emit TokenSold(_id, msg.sender, _amount, ethToUser);
     }
