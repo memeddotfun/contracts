@@ -1,10 +1,10 @@
-# Memed Smart Contracts
+# Memed.Fun Smart Contracts
 
-Memed is a decentralized meme token platform built on Base blockchain that combines fair launches, NFT battles, and engagement-based rewards. This repository contains all the core smart contracts that power the Memed ecosystem.
+Memed.Fun is a decentralized meme token platform built on Base blockchain that combines fair launches, NFT battles, and engagement-based rewards. This repository contains all the core smart contracts that power the Memed.Fun ecosystem.
 
 ## 🏗️ Architecture Overview
 
-The Memed platform consists of seven interconnected smart contracts:
+The Memed.Fun platform consists of seven interconnected smart contracts:
 
 ### Core Contracts
 
