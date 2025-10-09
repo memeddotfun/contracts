@@ -125,6 +125,24 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
         );
     }
 
+    function updateHeat(HeatUpdate[] calldata _heatUpdates) public {
+        require(
+            msg.sender == address(memedBattle) || msg.sender == owner(),
+            "unauthorized"
+        );
+
+        // Convert calldata to memory for internal processing
+        HeatUpdate[] memory heatUpdatesMemory = new HeatUpdate[](
+            _heatUpdates.length
+        );
+        for (uint i = 0; i < _heatUpdates.length; i++) {
+            heatUpdatesMemory[i] = _heatUpdates[i];
+        }
+
+        _updateHeatInternal(heatUpdatesMemory);
+    }
+
+
     function _updateHeatInternal(HeatUpdate[] memory _heatUpdates) internal {
         for (uint i = 0; i < _heatUpdates.length; i++) {
             TokenData memory token = getTokenByAddress(_heatUpdates[i].token);
