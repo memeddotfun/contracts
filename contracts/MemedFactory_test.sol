@@ -90,7 +90,7 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
             );
         }
         uint256 id = memedTokenSale.startFairLaunch(_creator);
-        TokenData memory token = tokenData[id];
+        TokenData storage token = tokenData[id];
         token.creator = _creator;
         token.name = _name;
         token.ticker = _ticker;

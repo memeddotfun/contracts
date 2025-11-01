@@ -16,7 +16,7 @@ contract MemedTokenSale_test is Ownable, ReentrancyGuard {
     uint256 public constant DECIMALS = 1e18;
     uint256 public constant TOTAL_FOR_SALE = 200_000_000 * DECIMALS;
     uint256 public constant TARGET_ETH_WEI = 40 ether;
-    uint256 public constant SCALE = 1e36;
+    uint256 public constant SCALE = 1e18;  // Reduced from 1e36 to fix price calculation
     uint256 public constant SLOPE = 2000;
     uint256 public platformFeePercentage = 10; // 1% to platform (10/1000)
     uint256 public feeDenominator = 1000; // For 1% fee calculation
@@ -376,7 +376,41 @@ contract MemedTokenSale_test is Ownable, ReentrancyGuard {
         return y;
     }
 
-       function priceAt(uint256 s) public pure returns (uint256) {
+    function getMaxCommittableETH(uint256 _id) public view returns (uint256) {
+        FairLaunchData storage fairLaunch = fairLaunchData[_id];
+        
+        // If not active, no more commitments allowed
+        if (fairLaunch.status != FairLaunchStatus.ACTIVE) {
+            return 0;
+        }
+        
+        // Calculate remaining tokens that can be sold (limited to INITIAL_SUPPLY)
+        if (fairLaunch.totalSold >= INITIAL_SUPPLY) {
+            return 0;
+        }
+        
+        uint256 remainingTokens = INITIAL_SUPPLY - fairLaunch.totalSold;
+        
+        // Calculate token amount needed using bonding curve: integral from s to s+delta
+        // amount = (SLOPE / (2 * SCALE)) * (2*s*delta + delta^2)
+        // Breaking down to avoid overflow:
+        uint256 s = fairLaunch.totalSold;
+        uint256 delta = remainingTokens;
+        
+        // Calculate using parts to avoid overflow
+        // part1 = SLOPE * s * delta / SCALE
+        // part2 = SLOPE * delta^2 / (2 * SCALE)
+        uint256 part1 = (SLOPE * s / SCALE) * delta;
+        uint256 part2 = (SLOPE * delta / SCALE) * delta / 2;
+        uint256 maxAmount = part1 + part2;
+        
+        // Account for platform fee - user needs to send more to get the net amount
+        uint256 maxAmountWithFee = (maxAmount * feeDenominator) / (feeDenominator - platformFeePercentage);
+        
+        return maxAmountWithFee;
+    }
+
+    function priceAt(uint256 s) public pure returns (uint256) {
         return (SLOPE * s) / SCALE;
     }
 
