@@ -37,6 +37,7 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
 
     // Events
     event TokenCreated(
+        uint256 indexed id,
         address indexed token,
         address indexed owner,
         string name,
@@ -98,6 +99,7 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
         token.isClaimedByCreator = _creator == address(0);
         tokenRewardData[id].lastRewardAt = INITIAL_REWARDS_PER_HEAT;
         emit TokenCreated(
+            id,
             token.token,
             token.creator,
             token.name,
