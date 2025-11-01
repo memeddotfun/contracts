@@ -20,8 +20,11 @@ async function main() {
       },
     },
   });
+  console.log("MemedBattle deployed to:", battle.address);
   const { engageToEarn } = await ignition.deploy(engageToEarnModule);
+  console.log("MemedEngageToEarn deployed to:", engageToEarn.address);
   const { tokenSale } = await ignition.deploy(tokenSaleModule);
+  console.log("MemedTokenSale deployed to:", tokenSale.address);
   const memedBattleAddress = battle.address;
   const memedBattleResolverAddress = battleResolver.address;
   const memedEngageToEarnAddress = engageToEarn.address;
@@ -36,6 +39,7 @@ async function main() {
       },
     },
   });
+  console.log("MemedFactory deployed to:", factory.address);
   const config = {
     factory: factory.address,
     memedBattle: memedBattleAddress,
