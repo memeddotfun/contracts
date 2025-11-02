@@ -16,8 +16,8 @@ contract MemedTokenSale_test is Ownable, ReentrancyGuard {
     uint256 public constant DECIMALS = 1e18;
     uint256 public constant TOTAL_FOR_SALE = 200_000_000 * DECIMALS;
     uint256 public constant TARGET_ETH_WEI = 40 ether;
-    uint256 public constant SCALE = 1e18;  // Reduced from 1e36 to fix price calculation
-    uint256 public constant SLOPE = 2000;
+    uint256 public constant SCALE = 1e18;  
+    uint256 public constant SLOPE = 2e21;  // Calculated so 40 ETH buys ~200M tokens
     uint256 public platformFeePercentage = 10; // 1% to platform (10/1000)
     uint256 public feeDenominator = 1000; // For 1% fee calculation
     IMemedFactory public memedFactory;
@@ -149,8 +149,8 @@ contract MemedTokenSale_test is Ownable, ReentrancyGuard {
         uint256 tokenAmount = getNativeToTokenAmount(_id, ethAfterFee);
         require(tokenAmount > 0, "Insufficient ETH");
         require(
-            fairLaunch.totalSold + tokenAmount <= INITIAL_SUPPLY,
-            "Exceeds initial supply"
+            fairLaunch.totalSold + tokenAmount <= TOTAL_FOR_SALE,
+            "Exceeds tokens for sale"
         );
 
         // Send platform fee to owner
@@ -197,7 +197,8 @@ contract MemedTokenSale_test is Ownable, ReentrancyGuard {
         fairLaunch.status = FairLaunchStatus.COMPLETED;
         // Create Uniswap pair and add liquidity);
 
-        (bool success, ) = payable(address(memedFactory)).call{value: fairLaunch.totalCommitted}("");
+        // Transfer test ETH tokens to factory
+        bool success = IERC20(MEMED_TEST_ETH).transfer(address(memedFactory), fairLaunch.totalCommitted);
         require(success, "Transfer failed");
         
         fairLaunch.status = FairLaunchStatus.READY_TO_COMPLETE;
@@ -254,8 +255,15 @@ contract MemedTokenSale_test is Ownable, ReentrancyGuard {
         FairLaunchData storage fairLaunch = fairLaunchData[_id];
         uint256 s = fairLaunch.totalSold;
         require(_delta <= s, "delta > s");
-        uint256 term1 = 2 * s * _delta;
-        uint256 term2 = _delta * _delta;
+        
+        // Convert to whole tokens for bonding curve calculation
+        uint256 s_whole = s / DECIMALS;
+        uint256 delta_whole = _delta / DECIMALS;
+        
+        // Formula: (SLOPE / (2*SCALE)) * (2*s*delta - delta^2)
+        // Where s and delta are in whole tokens
+        uint256 term1 = 2 * s_whole * delta_whole;
+        uint256 term2 = delta_whole * delta_whole;
         uint256 numer = SLOPE * (term1 - term2);
         uint256 denom = 2 * SCALE;
         return numer / denom;
@@ -268,18 +276,22 @@ contract MemedTokenSale_test is Ownable, ReentrancyGuard {
         FairLaunchData storage fairLaunch = fairLaunchData[_id];
         uint256 s = fairLaunch.totalSold;
         if (_ethAmount == 0) return 0;
+        
+        uint256 s_whole = s / DECIMALS;
+        
         uint256 A = SLOPE;
-        uint256 B = 2 * SLOPE * s;
+        uint256 B = 2 * SLOPE * s_whole;
         uint256 B2 = B * B;
-        uint256 add = 8 * SLOPE * _ethAmount * SCALE;
+        uint256 add = 8 * SLOPE * SCALE * _ethAmount;
         uint256 D = B2 + add;
         uint256 sqrtD = _sqrt(D);
-        if (sqrtD <= B) {
-            return 0;
-        }
+        if (sqrtD <= B) return 0;
         uint256 numer = sqrtD - B;
         uint256 denom = 2 * A;
-        return numer / denom;
+        uint256 delta_whole = numer / denom;
+        
+        // Convert back to wei
+        return delta_whole * DECIMALS;
     }
 
     function refund(uint256 _id) external nonReentrant {
@@ -302,9 +314,9 @@ contract MemedTokenSale_test is Ownable, ReentrancyGuard {
         Commitment storage commitment = fairLaunch.commitments[msg.sender];
         require(commitment.amount > 0, "No commitment");
         require(!commitment.refunded, "Already refunded");
-        (bool success, ) = payable(msg.sender).call{value: commitment.amount}(
-            ""
-        );
+        
+        // Transfer test ETH tokens back to user
+        bool success = IERC20(MEMED_TEST_ETH).transfer(msg.sender, commitment.amount);
         require(success, "Transfer failed");
         commitment.refunded = true;
     }
@@ -384,25 +396,32 @@ contract MemedTokenSale_test is Ownable, ReentrancyGuard {
             return 0;
         }
         
-        // Calculate remaining tokens that can be sold (limited to INITIAL_SUPPLY)
-        if (fairLaunch.totalSold >= INITIAL_SUPPLY) {
+        // Fair launch completes when totalCommitted >= TARGET_ETH_WEI (40 ETH)
+        // So max committable is TARGET_ETH_WEI - totalCommitted
+        if (fairLaunch.totalCommitted >= TARGET_ETH_WEI) {
             return 0;
         }
         
-        uint256 remainingTokens = INITIAL_SUPPLY - fairLaunch.totalSold;
+        uint256 remainingToTarget = TARGET_ETH_WEI - fairLaunch.totalCommitted;
         
-        // Calculate token amount needed using bonding curve: integral from s to s+delta
-        // amount = (SLOPE / (2 * SCALE)) * (2*s*delta + delta^2)
-        // Breaking down to avoid overflow:
+        // Also check if we have enough tokens left to sell (only 200M for sale)
+        if (fairLaunch.totalSold >= TOTAL_FOR_SALE) {
+            return 0;
+        }
+        
+        uint256 remainingTokens = TOTAL_FOR_SALE - fairLaunch.totalSold;
         uint256 s = fairLaunch.totalSold;
-        uint256 delta = remainingTokens;
         
-        // Calculate using parts to avoid overflow
-        // part1 = SLOPE * s * delta / SCALE
-        // part2 = SLOPE * delta^2 / (2 * SCALE)
-        uint256 part1 = (SLOPE * s / SCALE) * delta;
-        uint256 part2 = (SLOPE * delta / SCALE) * delta / 2;
-        uint256 maxAmount = part1 + part2;
+        // Calculate ETH needed to sell all remaining tokens
+        // Convert to whole tokens
+        uint256 s_whole = s / DECIMALS;
+        uint256 delta_whole = remainingTokens / DECIMALS;
+        uint256 term1 = 2 * s_whole * delta_whole;
+        uint256 term2 = delta_whole * delta_whole;
+        uint256 ethForAllTokens = SLOPE * (term1 + term2) / (2 * SCALE);
+        
+        // Take the minimum: either reach 40 ETH target OR sell all tokens
+        uint256 maxAmount = remainingToTarget < ethForAllTokens ? remainingToTarget : ethForAllTokens;
         
         // Account for platform fee - user needs to send more to get the net amount
         uint256 maxAmountWithFee = (maxAmount * feeDenominator) / (feeDenominator - platformFeePercentage);
@@ -411,7 +430,9 @@ contract MemedTokenSale_test is Ownable, ReentrancyGuard {
     }
 
     function priceAt(uint256 s) public pure returns (uint256) {
-        return (SLOPE * s) / SCALE;
+        // s is in wei, convert to whole tokens for price calculation
+        uint256 s_whole = s / DECIMALS;
+        return (SLOPE * s_whole) / SCALE;
     }
 
     function setPlatformFee(

@@ -4,8 +4,8 @@
   "type": "module",
   "scripts": {
     "compile": "npx hardhat compile",
-    "deploy:sepolia": "npx hardhat run scripts/deploy.ts --network baseSepolia && yarn verify:sepolia",
-    "deploy:base": "npx hardhat run scripts/deploy.ts --network base && yarn verify:base",
+    "deploy:sepolia": "npm run compile && npx hardhat run scripts/deploy.ts --network baseSepolia",
+    "deploy:base": "npm run compile && npx hardhat run scripts/deploy.ts --network base",
     "verify:sepolia": "npx hardhat ignition verify chain-84532 --network baseSepolia",
     "verify:base": "npx hardhat ignition verify chain-8453 --network base"
   },

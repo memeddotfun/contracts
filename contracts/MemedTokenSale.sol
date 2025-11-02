@@ -16,7 +16,7 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
     uint256 public constant TOTAL_FOR_SALE = 200_000_000 * DECIMALS;
     uint256 public constant TARGET_ETH_WEI = 40 ether;
     uint256 public constant SCALE = 1e18;  
-    uint256 public constant SLOPE = 2000;
+    uint256 public constant SLOPE = 2e21;  // Calculated so 40 ETH buys ~200M tokens
     uint256 public platformFeePercentage = 10; // 1% to platform (10/1000)
     uint256 public feeDenominator = 1000; // For 1% fee calculation
     IMemedFactory public memedFactory;
@@ -148,8 +148,8 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
         uint256 tokenAmount = getNativeToTokenAmount(_id, ethAfterFee);
         require(tokenAmount > 0, "Insufficient ETH");
         require(
-            fairLaunch.totalSold + tokenAmount <= INITIAL_SUPPLY,
-            "Exceeds initial supply"
+            fairLaunch.totalSold + tokenAmount <= TOTAL_FOR_SALE,
+            "Exceeds tokens for sale"
         );
 
         // Send platform fee to owner
@@ -256,8 +256,15 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
         FairLaunchData storage fairLaunch = fairLaunchData[_id];
         uint256 s = fairLaunch.totalSold;
         require(_delta <= s, "delta > s");
-        uint256 term1 = 2 * s * _delta;
-        uint256 term2 = _delta * _delta;
+        
+        // Convert to whole tokens for bonding curve calculation
+        uint256 s_whole = s / DECIMALS;
+        uint256 delta_whole = _delta / DECIMALS;
+        
+        // Formula: (SLOPE / (2*SCALE)) * (2*s*delta - delta^2)
+        // Where s and delta are in whole tokens
+        uint256 term1 = 2 * s_whole * delta_whole;
+        uint256 term2 = delta_whole * delta_whole;
         uint256 numer = SLOPE * (term1 - term2);
         uint256 denom = 2 * SCALE;
         return numer / denom;
@@ -270,18 +277,25 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
         FairLaunchData storage fairLaunch = fairLaunchData[_id];
         uint256 s = fairLaunch.totalSold;
         if (_ethAmount == 0) return 0;
+        
+        // Convert supply to whole tokens for bonding curve
+        uint256 s_whole = s / DECIMALS;
+        
+        // Quadratic formula: SLOPE*delta^2 + 2*SLOPE*s*delta - 2*SCALE*ETH = 0
+        // where delta is in whole tokens, s is in whole tokens
         uint256 A = SLOPE;
-        uint256 B = 2 * SLOPE * s;
+        uint256 B = 2 * SLOPE * s_whole;
         uint256 B2 = B * B;
-        uint256 add = 8 * SLOPE * _ethAmount * SCALE;
+        uint256 add = 8 * SLOPE * SCALE * _ethAmount;  // -4ac = 8*SLOPE*SCALE*ETH
         uint256 D = B2 + add;
         uint256 sqrtD = _sqrt(D);
-        if (sqrtD <= B) {
-            return 0;
-        }
+        if (sqrtD <= B) return 0;
         uint256 numer = sqrtD - B;
         uint256 denom = 2 * A;
-        return numer / denom;
+        uint256 delta_whole = numer / denom;
+        
+        // Convert back to wei
+        return delta_whole * DECIMALS;
     }
 
     function refund(uint256 _id) external nonReentrant {
@@ -385,26 +399,32 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
         if (fairLaunch.status != FairLaunchStatus.ACTIVE) {
             return 0;
         }
-        
-        // Calculate remaining tokens that can be sold (limited to INITIAL_SUPPLY)
-        if (fairLaunch.totalSold >= INITIAL_SUPPLY) {
+
+        // So max committable is TARGET_ETH_WEI - totalCommitted
+        if (fairLaunch.totalCommitted >= TARGET_ETH_WEI) {
             return 0;
         }
         
-        uint256 remainingTokens = INITIAL_SUPPLY - fairLaunch.totalSold;
+        uint256 remainingToTarget = TARGET_ETH_WEI - fairLaunch.totalCommitted;
         
-        // Calculate ETH needed using bonding curve: integral from s to s+delta
-        // ETH = (SLOPE / (2 * SCALE)) * (2*s*delta + delta^2)
-        // Breaking down to avoid overflow:
+        // Also check if we have enough tokens left to sell (only 200M for sale)
+        if (fairLaunch.totalSold >= TOTAL_FOR_SALE) {
+            return 0;
+        }
+        
+        uint256 remainingTokens = TOTAL_FOR_SALE - fairLaunch.totalSold;
         uint256 s = fairLaunch.totalSold;
-        uint256 delta = remainingTokens;
         
-        // Calculate using parts to avoid overflow
-        // part1 = SLOPE * s * delta / SCALE
-        // part2 = SLOPE * delta^2 / (2 * SCALE)
-        uint256 part1 = (SLOPE * s / SCALE) * delta;
-        uint256 part2 = (SLOPE * delta / SCALE) * delta / 2;
-        uint256 maxETH = part1 + part2;
+        // Calculate ETH needed to sell all remaining tokens
+        // Convert to whole tokens
+        uint256 s_whole = s / DECIMALS;
+        uint256 delta_whole = remainingTokens / DECIMALS;
+        uint256 term1 = 2 * s_whole * delta_whole;
+        uint256 term2 = delta_whole * delta_whole;
+        uint256 ethForAllTokens = SLOPE * (term1 + term2) / (2 * SCALE);
+        
+        // Take the minimum: either reach 40 ETH target OR sell all tokens
+        uint256 maxETH = remainingToTarget < ethForAllTokens ? remainingToTarget : ethForAllTokens;
         
         // Account for platform fee - user needs to send more to get the net amount
         uint256 maxETHWithFee = (maxETH * feeDenominator) / (feeDenominator - platformFeePercentage);
@@ -413,7 +433,9 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
     }
 
     function priceAt(uint256 s) public pure returns (uint256) {
-        return (SLOPE * s) / SCALE;
+        // s is in wei, convert to whole tokens for price calculation
+        uint256 s_whole = s / DECIMALS;
+        return (SLOPE * s_whole) / SCALE;
     }
 
     function setPlatformFee(

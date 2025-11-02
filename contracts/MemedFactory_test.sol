@@ -224,16 +224,17 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
         emit TokenCompletedFairLaunch(_id, _token, _warriorNFT);
         address pair = uniswapV2Factory.createPair(
             _token,
-            uniswapV2Router.WETH()
+            MEMED_TEST_ETH
         );
         
-        // Approve router to spend tokens
+        // Approve router to spend tokens and test ETH
         IERC20(_token).approve(address(uniswapV2Router), IMemedToken(_token).LP_ALLOCATION());
+        IERC20(MEMED_TEST_ETH).approve(address(uniswapV2Router), ethAmount);
 
-        // Add liquidity to Uniswap
+        // Add liquidity to Uniswap with test ETH tokens
         uniswapV2Router.addLiquidity(
             _token,
-            uniswapV2Router.WETH(),
+            MEMED_TEST_ETH,
             tokenAmount,
             ethAmount,
             0,
