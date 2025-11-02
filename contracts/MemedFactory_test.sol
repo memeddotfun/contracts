@@ -31,6 +31,7 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
 
     mapping(uint256 => TokenData) public tokenData;
     mapping(uint256 => TokenRewardData) public tokenRewardData;
+    mapping(address => uint256) public lpTokenIds; // Store LP NFT token IDs for fee collection
     address[] public tokens;
     INonfungiblePositionManager public positionManager;
     IUniswapV3Factory public uniswapV3Factory;
@@ -258,7 +259,7 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
         IERC20(token0).approve(address(positionManager), amount0);
         IERC20(token1).approve(address(positionManager), amount1);
 
-        positionManager.mint(
+        (uint256 tokenId, , , ) = positionManager.mint(
             INonfungiblePositionManager.MintParams({
                 token0: token0,
                 token1: token1,
@@ -273,7 +274,9 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
                 deadline: block.timestamp + 300
             })
         );
-
+        
+        // Store the LP NFT token ID for future fee collection
+        lpTokenIds[_token] = tokenId;
     }
 
     function swap(
@@ -303,6 +306,26 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
         
         uint256 amountOut = swapRouter.exactInputSingle(params);
         return amountOut;
+    }
+
+    /**
+     * @dev Collect accumulated swap fees from a Uniswap V3 LP position
+     * @param _token The token address for which to collect fees
+     * @return amount0 Amount of token0 fees collected
+     * @return amount1 Amount of token1 fees collected
+     */
+    function collectFees(address _token) external onlyOwner returns (uint256 amount0, uint256 amount1) {
+        uint256 tokenId = lpTokenIds[_token];
+        require(tokenId != 0, "No LP position for this token");
+        
+        (amount0, amount1) = positionManager.collect(
+            INonfungiblePositionManager.CollectParams({
+                tokenId: tokenId,
+                recipient: owner(),
+                amount0Max: type(uint128).max,
+                amount1Max: type(uint128).max
+            })
+        );
     }
 
     function getByToken(address _token) public view returns (TokenData memory) {
