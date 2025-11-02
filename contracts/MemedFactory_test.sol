@@ -218,6 +218,7 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
         (FairLaunchStatus status, uint256 ethAmount) = memedTokenSale.getFairLaunchData(_id);
         require(status == FairLaunchStatus.READY_TO_COMPLETE, "Fair launch not ready to complete");
         uint256 tokenAmount = IMemedToken(_token).LP_ALLOCATION();
+        IMemedToken(_token).allocateLp();
         token.token = _token;
         token.warriorNFT = _warriorNFT;
         tokens.push(_token);
