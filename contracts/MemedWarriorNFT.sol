@@ -10,6 +10,11 @@ import "../interfaces/IMemedBattle.sol";
 import "../interfaces/IMemedEngageToEarn.sol";
 import "../structs/WarriorStructs.sol";
 
+interface IMemedToken is IERC20 {
+    function burn(uint256 amount) external;
+    function burnFrom(address account, uint256 amount) external;
+}
+
 contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
     // Base price and dynamic pricing constants from Memed.md specification
     uint256 public constant BASE_PRICE = 5000 * 1e18; // 5,000 MEME base price
@@ -71,19 +76,14 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
     function mintWarrior() external nonReentrant returns (uint256) {
         uint256 price = getCurrentPrice();
         
-        // Check and transfer MEME tokens
+        // Check balance
         require(
             IERC20(memedToken).balanceOf(msg.sender) >= price,
             "Insufficient MEME tokens"
         );
         
-        require(
-            IERC20(memedToken).transferFrom(msg.sender, address(this), price),
-            "Transfer failed"
-        );
-        
-        // Burn the remaining MEME tokens
-        _burnTokens(price);
+        // Burn tokens directly from user (requires approval)
+        _burnTokens(msg.sender, price);
         
         // Mint NFT
         currentTokenId++;
@@ -187,15 +187,10 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
     }
     
     /**
-    * @dev Burn MEME tokens (send to zero address)
+    * @dev Burn MEME tokens from user using burnFrom (requires approval)
      */
-    function _burnTokens(uint256 _amount) internal {
-        // Transfer to zero address = burn
-        require(
-            IERC20(memedToken).transfer(address(0), _amount),
-            "Burn failed"
-        );
-        
+    function _burnTokens(address _from, uint256 _amount) internal {
+        IMemedToken(memedToken).burnFrom(_from, _amount);
         emit TokensBurned(_amount, factory.getHeat(memedToken));
     }
 

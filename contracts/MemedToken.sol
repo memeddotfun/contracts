@@ -86,4 +86,19 @@ contract MemedToken is ERC20, Ownable {
         _mint(to, CREATOR_INITIAL_ALLOCATION);
         emit CreatorSet(to);
     }
+
+    /**
+     * @dev Allows anyone to burn their own tokens
+     */
+    function burn(uint256 amount) external {
+        _burn(msg.sender, amount);
+    }
+
+    /**
+     * @dev Allows burning tokens from an account that has approved the caller
+     */
+    function burnFrom(address account, uint256 amount) external {
+        _spendAllowance(account, msg.sender, amount);
+        _burn(account, amount);
+    }
 }
