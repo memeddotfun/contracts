@@ -12,9 +12,9 @@ contract MemedTokenSale_test is Ownable, ReentrancyGuard {
     // Bonding curve parameters
     address public constant MEMED_TEST_ETH = 0xc190e6F26cE14e40D30251fDe25927A73a5D58b6;
     uint256 public constant FAIR_LAUNCH_DURATION = 30 days;
-    uint256 public INITIAL_SUPPLY = 1000000000 * 1e18; // 1B token
+    uint256 public INITIAL_SUPPLY = 300_000_000 * 1e18; // 300M total (200M sale + 100M LP)
     uint256 public constant DECIMALS = 1e18;
-    uint256 public constant TOTAL_FOR_SALE = 200_000_000 * DECIMALS;
+    uint256 public constant TOTAL_FOR_SALE = 200_000_000 * DECIMALS; // 200M for fair launch
     uint256 public constant TARGET_ETH_WEI = 40 ether;
     uint256 public constant SCALE = 1e18;  
     uint256 public constant SLOPE = 2e21;  // Calculated so 40 ETH buys ~200M tokens
@@ -46,9 +46,7 @@ contract MemedTokenSale_test is Ownable, ReentrancyGuard {
     );
 
     event FairLaunchReadyToComplete(
-        uint256 indexed id,
-        uint256 lpSupply,
-        uint256 totalRaised
+        uint256 indexed id
     );
 
     event FairLaunchCompleted(
@@ -82,6 +80,12 @@ contract MemedTokenSale_test is Ownable, ReentrancyGuard {
         address indexed seller,
         uint256 tokenAmount,
         uint256 ethReceived
+    );
+
+    event TokensClaimed(
+        uint256 indexed id,
+        address indexed user,
+        uint256 tokenAmount
     );
 
     event PlatformFeeCollected(
@@ -183,26 +187,17 @@ contract MemedTokenSale_test is Ownable, ReentrancyGuard {
             fairLaunch.status == FairLaunchStatus.ACTIVE,
             "Fair launch not launching"
         );
-        uint256 s = fairLaunch.totalSold;
-        uint256 p = priceAt(s);
-        require(p > 0, "price zero");
-
-        uint256 tokenAmount = (TARGET_ETH_WEI * DECIMALS) / p;
-
-        uint256 remaining = TOTAL_FOR_SALE - s;
-        if (tokenAmount > remaining) {
-            tokenAmount = remaining;
-        }
+        
+        require(fairLaunch.totalCommitted >= TARGET_ETH_WEI, "Insufficient ETH raised");
 
         fairLaunch.status = FairLaunchStatus.COMPLETED;
-        // Create Uniswap pair and add liquidity);
-
-        // Transfer test ETH tokens to factory
+        
+        // Transfer all raised ETH to factory for LP creation
         bool success = IERC20(MEMED_TEST_ETH).transfer(address(memedFactory), fairLaunch.totalCommitted);
         require(success, "Transfer failed");
         
         fairLaunch.status = FairLaunchStatus.READY_TO_COMPLETE;
-        emit FairLaunchReadyToComplete(_id, fairLaunch.totalCommitted, tokenAmount);
+        emit FairLaunchReadyToComplete(_id);
     }
 
     function completeFairLaunch(uint256 _id, address _token, address _pair) external onlyFactory {
@@ -321,6 +316,16 @@ contract MemedTokenSale_test is Ownable, ReentrancyGuard {
         commitment.refunded = true;
     }
 
+    function claim(uint256 _id) external nonReentrant {
+        FairLaunchData storage fairLaunch = fairLaunchData[_id];
+        require(fairLaunch.status == FairLaunchStatus.COMPLETED, "Fair launch not completed");
+        Commitment storage commitment = fairLaunch.commitments[msg.sender];
+        require(commitment.tokenAmount > 0, "No tokens to claim");
+        require(!commitment.claimed, "Already claimed");
+        commitment.claimed = true;
+        IERC20(memedFactory.getTokenById(_id).token).transfer(msg.sender, commitment.tokenAmount);
+        emit TokensClaimed(_id, msg.sender, commitment.tokenAmount);
+    }
     function isRefundable(uint256 _id) public view returns (bool) {
         FairLaunchData storage fairLaunch = fairLaunchData[_id];
         return

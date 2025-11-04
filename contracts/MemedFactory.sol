@@ -119,15 +119,14 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         address _token,
         address _creator
     ) external nonReentrant onlyOwner {
-        TokenData memory token = getTokenByAddress(_token);
+        TokenData storage token = tokenData[memedTokenSale.tokenIdByAddress(_token)];
         require(token.creator == _creator, "Creator mismatch");
         require(!token.isClaimedByCreator, "Already claimed by creator");
         require(!memedTokenSale.isMintable(_creator), "Creator already has a token");
         token.isClaimedByCreator = true;
         tokenRewardData[memedTokenSale.tokenIdByAddress(_token)].lastRewardAt = tokenRewardData[memedTokenSale.tokenIdByAddress(_token)].heat;
-        IMemedToken(token.token).claim(
-            token.creator,
-            (memedTokenSale.INITIAL_SUPPLY() * 5) / 100
+        IMemedToken(token.token).claimUnclaimedTokens(
+            token.creator
         );
     }
 
@@ -151,7 +150,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
 
     function _updateHeatInternal(HeatUpdate[] memory _heatUpdates) internal {
         for (uint i = 0; i < _heatUpdates.length; i++) {
-            TokenData memory token = getTokenByAddress(_heatUpdates[i].token);
+            TokenData storage token = tokenData[memedTokenSale.tokenIdByAddress(_heatUpdates[i].token)];
             require(token.token != address(0), "Token not created");
             TokenRewardData memory tokenReward = tokenRewardData[memedTokenSale.tokenIdByAddress(_heatUpdates[i].token)];
             require(
@@ -194,8 +193,8 @@ contract MemedFactory is Ownable, ReentrancyGuard {
 
     function battleUpdate(address _winner, address _loser) external {
         require(msg.sender == address(memedBattle), "unauthorized");
-        TokenRewardData memory token = tokenRewardData[memedTokenSale.tokenIdByAddress(_winner)];
-        TokenRewardData memory tokenLoser = tokenRewardData[memedTokenSale.tokenIdByAddress(_loser)];
+        TokenRewardData storage token = tokenRewardData[memedTokenSale.tokenIdByAddress(_winner)];
+        TokenRewardData storage tokenLoser = tokenRewardData[memedTokenSale.tokenIdByAddress(_loser)];
         token.creatorIncentivesUnlocksAt =
             token.creatorIncentivesUnlocksAt -
             ((token.creatorIncentivesUnlocksAt * BATTLE_REWARDS_PERCENTAGE) /
@@ -218,7 +217,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         address _token,
         address _warriorNFT
     ) external onlyOwner {
-        TokenData memory token = tokenData[_id];
+        TokenData storage token = tokenData[_id];
         (FairLaunchStatus status, uint256 ethAmount) = memedTokenSale.getFairLaunchData(_id);
         require(status == FairLaunchStatus.READY_TO_COMPLETE, "Fair launch not ready to complete");
         
