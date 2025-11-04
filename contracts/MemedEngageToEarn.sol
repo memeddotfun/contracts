@@ -34,10 +34,12 @@ contract MemedEngageToEarn is Ownable {
     function registerEngagementReward(address _token) external {
         require(msg.sender == address(factory), "Only factory can register engagement rewards");
         uint256 nftPrice = IMemedWarriorNFT(factory.getWarriorNFT(_token)).getCurrentPrice();
-        uint256 totalNFTs = IMemedWarriorNFT(factory.getWarriorNFT(_token)).getWarriorMintedBeforeByUser(address(this), block.timestamp);
+        uint256 totalNFTs = IMemedWarriorNFT(factory.getWarriorNFT(_token)).currentTokenId();
         TokenBattleAllocation memory tokenBattleAllocation = IMemedBattle(factory.getMemedBattle()).tokenBattleAllocations(_token);
-        uint256 change = (ENGAGEMENT_REWARDS_CHANGE * tokenBattleAllocation.winCount) - (ENGAGEMENT_REWARDS_CHANGE * tokenBattleAllocation.loseCount);
-        uint256 totalReward =   ((totalNFTs * nftPrice * ENGAGEMENT_REWARDS_PER_NFT_PERCENTAGE) / 100) + change;
+        uint256 change = tokenBattleAllocation.winCount > tokenBattleAllocation.loseCount 
+            ? (ENGAGEMENT_REWARDS_CHANGE * (tokenBattleAllocation.winCount - tokenBattleAllocation.loseCount))
+            : 0;
+        uint256 totalReward = ((totalNFTs * nftPrice * ENGAGEMENT_REWARDS_PER_NFT_PERCENTAGE) / 100) + change;
         require(totalReward > 0, "No reward");
         require(totalClaimed[_token] + totalReward <= MAX_REWARD, "Max reward reached");
         totalClaimed[_token] += totalReward;
@@ -49,17 +51,23 @@ contract MemedEngageToEarn is Ownable {
     function claimEngagementReward(uint256 _rewardId) external {
         require(!isClaimedByUser[_rewardId][msg.sender], "Already claimed");
         EngagementReward memory reward = engagementRewards[_rewardId];
+        require(reward.token != address(0), "Reward does not exist");
+        
         uint256 nftCount = IMemedWarriorNFT(factory.getWarriorNFT(reward.token)).getWarriorMintedBeforeByUser(msg.sender, reward.timestamp);
         uint256[] memory tokenAllocations = IMemedBattle(factory.getMemedBattle()).tokenAllocations(msg.sender);
         uint256 change = 0;
         for (uint256 i = 0; i < tokenAllocations.length; i++) {
             TokenBattleAllocation memory tokenBattleAllocation = IMemedBattle(factory.getMemedBattle()).getUserTokenBattleAllocations(tokenAllocations[i], reward.timestamp);
-            change += (ENGAGEMENT_REWARDS_CHANGE * tokenBattleAllocation.winCount) - (ENGAGEMENT_REWARDS_CHANGE * tokenBattleAllocation.loseCount);
+            if (tokenBattleAllocation.winCount > tokenBattleAllocation.loseCount) {
+                change += ENGAGEMENT_REWARDS_CHANGE * (tokenBattleAllocation.winCount - tokenBattleAllocation.loseCount);
+            }
         }
         uint256 amount = (((reward.nftPrice * nftCount) * ENGAGEMENT_REWARDS_PER_NFT_PERCENTAGE) / 100) + change;
-        IERC20(reward.token).transfer(msg.sender, amount);
+        require(amount > 0, "No reward to claim");
+        
         isClaimedByUser[_rewardId][msg.sender] = true;
         engagementRewards[_rewardId].amountClaimed += amount;
+        IERC20(reward.token).transfer(msg.sender, amount);
         emit EngagementRewardClaimed(msg.sender, _rewardId, amount);
     }
 
@@ -77,7 +85,9 @@ contract MemedEngageToEarn is Ownable {
         uint256 change = 0;
         for (uint256 i = 0; i < tokenAllocations.length; i++) {
             TokenBattleAllocation memory tokenBattleAllocation = IMemedBattle(factory.getMemedBattle()).getUserTokenBattleAllocations(tokenAllocations[i], block.timestamp);
-            change += (ENGAGEMENT_REWARDS_CHANGE * tokenBattleAllocation.winCount) - (ENGAGEMENT_REWARDS_CHANGE * tokenBattleAllocation.loseCount);
+            if (tokenBattleAllocation.winCount > tokenBattleAllocation.loseCount) {
+                change += ENGAGEMENT_REWARDS_CHANGE * (tokenBattleAllocation.winCount - tokenBattleAllocation.loseCount);
+            }
         }
         return ((nftPrice * ENGAGEMENT_REWARDS_PER_NFT_PERCENTAGE) / 100) + change;
     }
@@ -109,7 +119,8 @@ contract MemedEngageToEarn is Ownable {
     }
     
     function isRewardable(address _token) external view returns (bool) {
-        uint256 totalNFTs = IMemedWarriorNFT(factory.getWarriorNFT(_token)).getWarriorMintedBeforeByUser(address(this), block.timestamp);
+        uint256 totalNFTs = IMemedWarriorNFT(factory.getWarriorNFT(_token)).currentTokenId();
+        if (totalNFTs == 0) return false;
         uint256 totalReward = (totalNFTs * IMemedWarriorNFT(factory.getWarriorNFT(_token)).getCurrentPrice() * ENGAGEMENT_REWARDS_PER_NFT_PERCENTAGE) / 100;
         return totalClaimed[_token] + totalReward <= IERC20(_token).balanceOf(address(this));
     }

@@ -8,12 +8,9 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "../interfaces/IMemedFactory.sol";
 import "../interfaces/IMemedBattle.sol";
 import "../interfaces/IMemedEngageToEarn.sol";
+import "../interfaces/IMemedToken.sol";
 import "../structs/WarriorStructs.sol";
 
-interface IMemedToken is IERC20 {
-    function burn(uint256 amount) external;
-    function burnFrom(address account, uint256 amount) external;
-}
 
 contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
     // Base price and dynamic pricing constants from Memed.md specification

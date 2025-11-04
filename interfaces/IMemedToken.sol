@@ -8,4 +8,6 @@ interface IMemedToken {
     function isRewardable() external view returns (bool);
     function unlockCreatorIncentives() external;
     function claimUnclaimedTokens(address to) external;
+    function burn(uint256 amount) external;
+    function burnFrom(address account, uint256 amount) external;
 }

@@ -128,10 +128,9 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
             "Creator already has a token"
         );
         token.isClaimedByCreator = true;
-        tokenRewardData[memedTokenSale.tokenIdByAddress(_token)]
-            .lastRewardAt = tokenRewardData[
-            memedTokenSale.tokenIdByAddress(_token)
-        ].heat;
+        // Reset lastRewardAt to current heat when creator claims
+        TokenRewardData storage rewardData = tokenRewardData[memedTokenSale.tokenIdByAddress(_token)];
+        rewardData.lastRewardAt = rewardData.heat;
         IMemedToken(token.token).claimUnclaimedTokens(
             token.creator
         );
@@ -158,18 +157,28 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
         for (uint i = 0; i < _heatUpdates.length; i++) {
             TokenData storage token = tokenData[memedTokenSale.tokenIdByAddress(_heatUpdates[i].token)];
             require(token.token != address(0), "Token not created");
-            TokenRewardData memory tokenReward = tokenRewardData[
+            TokenRewardData storage tokenReward = tokenRewardData[
                 memedTokenSale.tokenIdByAddress(_heatUpdates[i].token)
             ];
             require(
-                block.timestamp >= tokenReward.lastRewardAt + 1 days,
+                block.timestamp >= tokenReward.lastHeatUpdate + 1 days,
                 "Heat update too frequent"
             );
 
-            tokenReward.lastRewardAt = block.timestamp;
-            tokenReward.lastRewardAt = _heatUpdates[i].heat;
-            tokenReward.heat += _heatUpdates[i].heat - tokenReward.lastRewardAt;
+            // Store old heat for comparison
+            uint256 oldHeat = tokenReward.heat;
+            uint256 newHeat = _heatUpdates[i].heat;
+            
+            // Update heat value and timestamp
+            tokenReward.heat = newHeat;
+            tokenReward.lastHeatUpdate = block.timestamp;
+            
+            // Initialize lastRewardAt if this is first update after creation
+            if (tokenReward.lastRewardAt == INITIAL_REWARDS_PER_HEAT && oldHeat == 0) {
+                tokenReward.lastRewardAt = 0;
+            }
 
+            // Check if engagement rewards should be unlocked
             if (
                 (tokenReward.heat - tokenReward.lastRewardAt) >=
                 ENGAGEMENT_REWARDS_PER_NEW_HEAT &&
@@ -179,6 +188,7 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
                 tokenReward.lastRewardAt = tokenReward.heat;
             }
 
+            // Check if creator incentives should be unlocked
             if (
                 token.isClaimedByCreator &&
                 tokenReward.heat - tokenReward.creatorIncentivesUnlockedAt >=

@@ -7,4 +7,5 @@ interface IMemedWarriorNFT {
     function getCurrentPrice() external view returns (uint256);
     function getWarriorMintedBeforeByUser(address _user, uint256 _timestamp) external view returns (uint256);
     function memedToken() external view returns (address);
+    function currentTokenId() external view returns (uint256);
 }
