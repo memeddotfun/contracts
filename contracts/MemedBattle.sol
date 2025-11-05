@@ -176,8 +176,16 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         Battle storage battle = battles[_battleId];
         require(battle.status == BattleStatus.RESOLVED, "Battle not resolved");
         require(!battleAllocations[_battleId][msg.sender][battle.winner].claimed, "Already claimed");
-        uint256 reward = battle.totalReward * battleAllocations[_battleId][msg.sender][battle.winner].nftsIds.length / (battle.winner == battle.memeA ? battle.memeANftsAllocated : battle.memeBNftsAllocated);
+        
+        uint256 userNfts = battleAllocations[_battleId][msg.sender][battle.winner].nftsIds.length;
+        require(userNfts > 0, "No NFTs allocated");
+        
+        uint256 totalWinnerNfts = battle.winner == battle.memeA ? battle.memeANftsAllocated : battle.memeBNftsAllocated;
+        require(totalWinnerNfts > 0, "No winner NFTs allocated");
+        
+        uint256 reward = battle.totalReward * userNfts / totalWinnerNfts;
         require(reward > 0, "No reward to claim");
+        
         IMemedEngageToEarn(factory.getMemedEngageToEarn()).claimBattleRewards(battle.winner, msg.sender, reward);
         battleAllocations[_battleId][msg.sender][battle.winner].claimed = true;
         emit BattleRewardsClaimed(_battleId, msg.sender, reward);
@@ -354,19 +362,30 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         uint256 nftReward = IMemedEngageToEarn(factory.getMemedEngageToEarn()).getNftReward(_token);
         uint256 engagementRewardChange = IMemedEngageToEarn(factory.getMemedEngageToEarn()).ENGAGEMENT_REWARDS_CHANGE();
         UserNftBattleAllocation[] memory nftAllocations = nftBattleAllocations[_nftId];
+        
         for (uint256 i = 0; i < nftAllocations.length; i++) {
             Battle storage battle = battles[nftAllocations[i].battleId];
-            if(battle.status == BattleStatus.STARTED) {
+            
+            // NFT still in active battle
+            if(battle.status == BattleStatus.STARTED || battle.status == BattleStatus.CHALLENGED) {
                 return false;
             }
-            if(nftAllocations[i].supportedMeme == battle.winner) {
-                nftReward += engagementRewardChange;
-            }else{
-                nftReward -= engagementRewardChange;
+            
+            // Only count resolved battles
+            if(battle.status == BattleStatus.RESOLVED) {
+                if(nftAllocations[i].supportedMeme == battle.winner) {
+                    nftReward += engagementRewardChange;
+                } else {
+                    // Prevent underflow
+                    if(nftReward >= engagementRewardChange) {
+                        nftReward -= engagementRewardChange;
+                    } else {
+                        return false; // NFT lost too much value, not returnable
+                    }
+                }
             }
         }
         return nftReward > 0;
-
     }
 
     function getUserTokenAllocations(address _user) external view returns (uint256[] memory) {

@@ -4,13 +4,14 @@ pragma solidity ^0.8.28;
 import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "../interfaces/IMemedWarriorNFT.sol";
 import "../interfaces/IMemedFactory.sol";
 import "../interfaces/IMemedBattle.sol";
 import "../structs/BattleStructs.sol";
 import "../structs/EngageToEarnStructs.sol";
 
-contract MemedEngageToEarn is Ownable {
+contract MemedEngageToEarn is Ownable, ReentrancyGuard {
     constructor() Ownable(msg.sender) {}
 
     uint256 public constant MAX_REWARD = 500_000_000 * 1e18; // 500M tokens for engagement rewards (v2.3)
@@ -48,7 +49,7 @@ contract MemedEngageToEarn is Ownable {
         emit EngagementRewardRegistered(engagementRewardId, _token, nftPrice, block.timestamp);
     }
 
-    function claimEngagementReward(uint256 _rewardId) external {
+    function claimEngagementReward(uint256 _rewardId) external nonReentrant {
         require(!isClaimedByUser[_rewardId][msg.sender], "Already claimed");
         EngagementReward memory reward = engagementRewards[_rewardId];
         require(reward.token != address(0), "Reward does not exist");
@@ -64,10 +65,11 @@ contract MemedEngageToEarn is Ownable {
         }
         uint256 amount = (((reward.nftPrice * nftCount) * ENGAGEMENT_REWARDS_PER_NFT_PERCENTAGE) / 100) + change;
         require(amount > 0, "No reward to claim");
+        require(IERC20(reward.token).balanceOf(address(this)) >= amount, "Insufficient balance");
         
         isClaimedByUser[_rewardId][msg.sender] = true;
         engagementRewards[_rewardId].amountClaimed += amount;
-        IERC20(reward.token).transfer(msg.sender, amount);
+        require(IERC20(reward.token).transfer(msg.sender, amount), "Transfer failed");
         emit EngagementRewardClaimed(msg.sender, _rewardId, amount);
     }
 
@@ -133,7 +135,7 @@ contract MemedEngageToEarn is Ownable {
      * @dev Batch claim multiple engagement rewards
      * @param _rewardIds Array of reward IDs to claim
      */
-    function batchClaimEngagementRewards(uint256[] calldata _rewardIds) external {
+    function batchClaimEngagementRewards(uint256[] calldata _rewardIds) external nonReentrant {
         require(_rewardIds.length > 0, "No reward IDs provided");
         require(_rewardIds.length <= 50, "Too many rewards to claim at once"); // Prevent gas limit issues
         
@@ -173,12 +175,17 @@ contract MemedEngageToEarn is Ownable {
                 continue;
             }
             
+            // Check balance before transfer
+            if (IERC20(reward.token).balanceOf(address(this)) < amount) {
+                continue; // Skip if insufficient balance
+            }
+            
             // Mark as claimed
             isClaimedByUser[_rewardId][msg.sender] = true;
             engagementRewards[_rewardId].amountClaimed += amount;
             
             // Transfer tokens
-            IERC20(reward.token).transfer(msg.sender, amount);
+            require(IERC20(reward.token).transfer(msg.sender, amount), "Transfer failed");
             
             emit EngagementRewardClaimed(msg.sender, _rewardId, amount);
         }
@@ -190,12 +197,12 @@ contract MemedEngageToEarn is Ownable {
      * @param _winner Winner token address (token to swap to)
      * @param _loserAmount Amount of loser tokens to swap
      */
-    function transferBattleRewards(address _loser, address _winner, uint256 _loserAmount) external returns (uint256) {
+    function transferBattleRewards(address _loser, address _winner, uint256 _loserAmount) external nonReentrant returns (uint256) {
         require(msg.sender == IMemedBattle(factory.getMemedBattle()).getResolver(), "Only resolver can transfer battle rewards");
         require(IERC20(_loser).balanceOf(address(this)) >= _loserAmount, "Insufficient loser token balance");
         
         // Transfer loser tokens to factory for swap
-        IERC20(_loser).transfer(address(factory), _loserAmount);
+        require(IERC20(_loser).transfer(address(factory), _loserAmount), "Transfer to factory failed");
         
         // Swap loser tokens to winner tokens
         address[] memory path = new address[](2);
@@ -207,10 +214,10 @@ contract MemedEngageToEarn is Ownable {
         return amountOut;
     }
 
-    function claimBattleRewards(address _token, address _winner, uint256 _amount) external {
+    function claimBattleRewards(address _token, address _winner, uint256 _amount) external nonReentrant {
         require(msg.sender == factory.getMemedBattle(), "Only battle can transfer battle rewards");
         require(IERC20(_token).balanceOf(address(this)) >= _amount, "Insufficient balance");
-        IERC20(_token).transfer(_winner, _amount);
+        require(IERC20(_token).transfer(_winner, _amount), "Transfer failed");
     }
 
     function setFactory(address _factory) external onlyOwner {

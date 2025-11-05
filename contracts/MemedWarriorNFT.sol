@@ -108,7 +108,10 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
      * @dev Get back the warrior NFTs to the user if they win the battle
      */
     function getBackWarrior(uint256 _nftId) external {
-        require(memedBattle.isNftReturnable(memedToken , _nftId), "NFT not returnable");
+        require(_exists(_nftId), "NFT does not exist");
+        require(ownerOf(_nftId) == msg.sender, "Not the owner");
+        require(warriors[_nftId].allocated, "NFT not allocated");
+        require(memedBattle.isNftReturnable(memedToken, _nftId), "NFT not returnable");
         warriors[_nftId].allocated = false;
         emit WarriorGetBack(_nftId, msg.sender);
     }
