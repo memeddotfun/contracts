@@ -177,11 +177,117 @@ contract MemedBattle is Ownable, ReentrancyGuard {
     function claimRewards(uint256 _battleId) external {
         Battle storage battle = battles[_battleId];
         require(battle.status == BattleStatus.RESOLVED, "Battle not resolved");
+        require(!battleAllocations[_battleId][msg.sender][battle.winner].claimed, "Already claimed");
         uint256 reward = battle.totalReward * battleAllocations[_battleId][msg.sender][battle.winner].nftsIds.length / (battle.winner == battle.memeA ? battle.memeANftsAllocated : battle.memeBNftsAllocated);
         require(reward > 0, "No reward to claim");
-        IMemedEngageToEarn(factory.getMemedEngageToEarn()).claimBattleRewards(battle.memeA, msg.sender, reward);
+        IMemedEngageToEarn(factory.getMemedEngageToEarn()).claimBattleRewards(battle.winner, msg.sender, reward);
         battleAllocations[_battleId][msg.sender][battle.winner].claimed = true;
         emit BattleRewardsClaimed(_battleId, msg.sender, reward);
+    }
+
+    /**
+     * @dev Batch claim rewards from multiple battles
+     * @param _battleIds Array of battle IDs to claim rewards from
+     */
+    function batchClaimRewards(uint256[] calldata _battleIds) external nonReentrant {
+        require(_battleIds.length > 0, "No battle IDs provided");
+        require(_battleIds.length <= 50, "Too many battles to claim at once"); // Prevent gas limit issues
+        
+        uint256 totalRewardsClaimed = 0;
+        address rewardToken;
+        
+        for (uint256 i = 0; i < _battleIds.length; i++) {
+            uint256 _battleId = _battleIds[i];
+            Battle storage battle = battles[_battleId];
+            
+            // Skip if battle not resolved
+            if (battle.status != BattleStatus.RESOLVED) {
+                continue;
+            }
+            
+            // Skip if already claimed
+            if (battleAllocations[_battleId][msg.sender][battle.winner].claimed) {
+                continue;
+            }
+            
+            // Skip if user didn't participate or supported the loser
+            UserBattleAllocation storage allocation = battleAllocations[_battleId][msg.sender][battle.winner];
+            if (allocation.nftsIds.length == 0) {
+                continue;
+            }
+            
+            // Calculate reward
+            uint256 totalNftsAllocated = battle.winner == battle.memeA ? battle.memeANftsAllocated : battle.memeBNftsAllocated;
+            if (totalNftsAllocated == 0) {
+                continue;
+            }
+            
+            uint256 reward = (battle.totalReward * allocation.nftsIds.length) / totalNftsAllocated;
+            
+            // Skip if no reward
+            if (reward == 0) {
+                continue;
+            }
+            
+            // Set reward token (should be the same for all battles in a batch)
+            if (rewardToken == address(0)) {
+                rewardToken = battle.winner;
+            }
+            
+            // Mark as claimed
+            allocation.claimed = true;
+            totalRewardsClaimed += reward;
+            
+            emit BattleRewardsClaimed(_battleId, msg.sender, reward);
+        }
+        
+        // Transfer total rewards in a single transaction
+        if (totalRewardsClaimed > 0 && rewardToken != address(0)) {
+            IMemedEngageToEarn(factory.getMemedEngageToEarn()).claimBattleRewards(rewardToken, msg.sender, totalRewardsClaimed);
+        }
+    }
+
+    /**
+     * @dev Get all claimable battle rewards for a user
+     * @param _user User address
+     * @return battleIdsArray Array of battle IDs with claimable rewards
+     * @return rewardsArray Array of reward amounts corresponding to each battle
+     * @return totalReward Total claimable reward across all battles
+     */
+    function getUserClaimableBattles(address _user) external view returns (uint256[] memory battleIdsArray, uint256[] memory rewardsArray, uint256 totalReward) {
+        // Count claimable battles
+        uint256 count = 0;
+        for (uint256 i = 0; i < battleCount; i++) {
+            Battle storage battle = battles[i];
+            if (battle.status == BattleStatus.RESOLVED && 
+                !battleAllocations[i][_user][battle.winner].claimed &&
+                battleAllocations[i][_user][battle.winner].nftsIds.length > 0) {
+                count++;
+            }
+        }
+        
+        // Build result arrays
+        battleIdsArray = new uint256[](count);
+        rewardsArray = new uint256[](count);
+        uint256 index = 0;
+        
+        for (uint256 i = 0; i < battleCount; i++) {
+            Battle storage battle = battles[i];
+            if (battle.status == BattleStatus.RESOLVED && 
+                !battleAllocations[i][_user][battle.winner].claimed &&
+                battleAllocations[i][_user][battle.winner].nftsIds.length > 0) {
+                
+                uint256 totalNftsAllocated = battle.winner == battle.memeA ? battle.memeANftsAllocated : battle.memeBNftsAllocated;
+                uint256 reward = totalNftsAllocated > 0 
+                    ? (battle.totalReward * battleAllocations[i][_user][battle.winner].nftsIds.length) / totalNftsAllocated 
+                    : 0;
+                
+                battleIdsArray[index] = i;
+                rewardsArray[index] = reward;
+                totalReward += reward;
+                index++;
+            }
+        }
     }
 
     function setFactoryAndResolver(address _factory, address _resolver) external onlyOwner {

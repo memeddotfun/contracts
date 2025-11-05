@@ -12,7 +12,7 @@ interface IMemedFactory {
         uint256 _amount,
         address[] calldata _path,
         address _to
-    ) external returns (uint[] memory amounts);
+    ) external returns (uint256 amountOut);
     function getTokenById(uint256 _id) external view returns (TokenData memory);
     function getHeat(address _token) external view returns (uint256);
     function getWarriorNFT(address _token) external view returns (address);

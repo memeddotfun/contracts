@@ -6,10 +6,18 @@ import "dotenv/config";
 
 const { ALCHEMY_API_KEY, WALLET_KEY, ETHERSCAN_API_KEY } = process.env;
 
-const config: HardhatUserConfig = {
+const config = {
   plugins: [hardhatToolboxViemPlugin, hardhatVerifyPlugin],
   solidity: {
     version: "0.8.28",
+    settings: {
+      optimizer: {
+        enabled: true,
+        runs: 200,
+      },
+      evmVersion: "cancun",
+      viaIR: false,
+    },
   },
   networks: {
     base: {
@@ -25,10 +33,11 @@ const config: HardhatUserConfig = {
       chainId: 84532,
     },
   },
-  verify: {
   etherscan: {
-    apiKey: ETHERSCAN_API_KEY,
+    apiKey: ETHERSCAN_API_KEY || "",
   },
+  sourcify: {
+    enabled: false,
   },
 };
 

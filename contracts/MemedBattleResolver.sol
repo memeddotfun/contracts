@@ -54,11 +54,12 @@ contract MemedBattleResolver is Ownable {
         address actualWinner = finalScoreA >= finalScoreB ? battle.memeA : battle.memeB;
         address actualLoser = actualWinner == battle.memeA ? battle.memeB : battle.memeA;
         
-        // Winner receives 5% of engagement rewards pool (swapped to winner's token)
-        uint256 battleRewardAmount = IMemedEngageToEarn(factory.getMemedEngageToEarn()).getBattleRewardPool(actualWinner);
+        // Get 5% of LOSER's token balance in EngageToEarn pool to swap to winner tokens
+        uint256 loserTokenAmount = IMemedEngageToEarn(factory.getMemedEngageToEarn()).getBattleRewardPool(actualLoser);
         uint256 totalReward;
-        if (battleRewardAmount > 0) {
-            totalReward = IMemedEngageToEarn(factory.getMemedEngageToEarn()).transferBattleRewards(actualLoser, actualWinner, battleRewardAmount);
+        if (loserTokenAmount > 0) {
+            // Swap loser tokens to winner tokens and return the winner token amount received
+            totalReward = IMemedEngageToEarn(factory.getMemedEngageToEarn()).transferBattleRewards(actualLoser, actualWinner, loserTokenAmount);
         }
         
         // Update heat for winner

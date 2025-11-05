@@ -7,3 +7,10 @@ struct EngagementReward {
     uint256 nftPrice;
     uint256 timestamp;
 }
+
+struct EngagementRewardClaim {
+    address user;
+    uint256 rewardId;
+    uint256 amountToClaim;
+    address token;
+}
