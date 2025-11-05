@@ -11,7 +11,7 @@ interface IMemedBattle {
         uint256 _tokenId,
         uint256 _until
     ) external view returns (TokenBattleAllocation memory);
-    function tokenAllocations(
+    function getUserTokenAllocations(
         address _user
     ) external view returns (uint256[] memory);
     function getBattle(uint256 _battleId) external view returns (Battle memory);

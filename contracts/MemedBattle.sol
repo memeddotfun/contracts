@@ -347,4 +347,8 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         require(!battleAllocations[_battleId][_user][battle.winner].claimed, "Already claimed");
         return battle.totalReward * battleAllocations[_battleId][_user][battle.winner].nftsIds.length / (battle.winner == battle.memeA ? battle.memeANftsAllocated : battle.memeBNftsAllocated);
     }
+
+    function getUserTokenAllocations(address _user) external view returns (uint256[] memory) {
+        return tokenAllocations[_user];
+    }
 }

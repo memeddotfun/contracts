@@ -54,10 +54,10 @@ contract MemedEngageToEarn is Ownable {
         require(reward.token != address(0), "Reward does not exist");
         
         uint256 nftCount = IMemedWarriorNFT(factory.getWarriorNFT(reward.token)).getWarriorMintedBeforeByUser(msg.sender, reward.timestamp);
-        uint256[] memory tokenAllocations = IMemedBattle(factory.getMemedBattle()).tokenAllocations(msg.sender);
+        uint256[] memory tokenAllocationsArray = IMemedBattle(factory.getMemedBattle()).getUserTokenAllocations(msg.sender);
         uint256 change = 0;
-        for (uint256 i = 0; i < tokenAllocations.length; i++) {
-            TokenBattleAllocation memory tokenBattleAllocation = IMemedBattle(factory.getMemedBattle()).getUserTokenBattleAllocations(tokenAllocations[i], reward.timestamp);
+        for (uint256 i = 0; i < tokenAllocationsArray.length; i++) {
+            TokenBattleAllocation memory tokenBattleAllocation = IMemedBattle(factory.getMemedBattle()).getUserTokenBattleAllocations(tokenAllocationsArray[i], reward.timestamp);
             if (tokenBattleAllocation.winCount > tokenBattleAllocation.loseCount) {
                 change += ENGAGEMENT_REWARDS_CHANGE * (tokenBattleAllocation.winCount - tokenBattleAllocation.loseCount);
             }
@@ -80,7 +80,16 @@ contract MemedEngageToEarn is Ownable {
     }
 
     function getUserEngagementReward() public view returns (EngagementRewardClaim[] memory) {
-        EngagementRewardClaim[] memory engagementRewardsClaims = new EngagementRewardClaim[](engagementRewardId);
+        // First pass: count valid claims
+        uint256 validClaimCount = 0;
+        for (uint256 i = 1; i <= engagementRewardId; i++) {
+            if (!isClaimedByUser[i][msg.sender] && engagementRewards[i].token != address(0)) {
+                validClaimCount++;
+            }
+        }
+        
+        EngagementRewardClaim[] memory engagementRewardsClaims = new EngagementRewardClaim[](validClaimCount);
+        uint256 index = 0;
         
         for (uint256 i = 1; i <= engagementRewardId; i++) {
             if (isClaimedByUser[i][msg.sender]) {
@@ -96,10 +105,10 @@ contract MemedEngageToEarn is Ownable {
             uint256 nftCount = IMemedWarriorNFT(factory.getWarriorNFT(reward.token)).getWarriorMintedBeforeByUser(msg.sender, reward.timestamp);
             
             // Calculate battle-based change rewards
-            uint256[] memory tokenAllocations = IMemedBattle(factory.getMemedBattle()).tokenAllocations(msg.sender);
+            uint256[] memory tokenAllocationsArray = IMemedBattle(factory.getMemedBattle()).getUserTokenAllocations(msg.sender);
             uint256 change = 0;
-            for (uint256 j = 0; j < tokenAllocations.length; j++) {
-                TokenBattleAllocation memory tokenBattleAllocation = IMemedBattle(factory.getMemedBattle()).getUserTokenBattleAllocations(tokenAllocations[j], reward.timestamp);
+            for (uint256 j = 0; j < tokenAllocationsArray.length; j++) {
+                TokenBattleAllocation memory tokenBattleAllocation = IMemedBattle(factory.getMemedBattle()).getUserTokenBattleAllocations(tokenAllocationsArray[j], reward.timestamp);
                 if (tokenBattleAllocation.winCount > tokenBattleAllocation.loseCount) {
                     change += ENGAGEMENT_REWARDS_CHANGE * (tokenBattleAllocation.winCount - tokenBattleAllocation.loseCount);
                 }
@@ -108,7 +117,8 @@ contract MemedEngageToEarn is Ownable {
             // Calculate total reward amount
             uint256 amount = (((reward.nftPrice * nftCount) * ENGAGEMENT_REWARDS_PER_NFT_PERCENTAGE) / 100) + change;
             
-            engagementRewardsClaims[i - 1] = EngagementRewardClaim(msg.sender, i, amount, reward.token);
+            engagementRewardsClaims[index] = EngagementRewardClaim(msg.sender, i, amount, reward.token);
+            index++;
         }
         
         return engagementRewardsClaims;
@@ -141,10 +151,10 @@ contract MemedEngageToEarn is Ownable {
             uint256 nftCount = IMemedWarriorNFT(factory.getWarriorNFT(reward.token)).getWarriorMintedBeforeByUser(msg.sender, reward.timestamp);
             
             // Calculate battle-based change rewards
-            uint256[] memory tokenAllocations = IMemedBattle(factory.getMemedBattle()).tokenAllocations(msg.sender);
+            uint256[] memory tokenAllocationsArray = IMemedBattle(factory.getMemedBattle()).getUserTokenAllocations(msg.sender);
             uint256 change = 0;
-            for (uint256 j = 0; j < tokenAllocations.length; j++) {
-                TokenBattleAllocation memory tokenBattleAllocation = IMemedBattle(factory.getMemedBattle()).getUserTokenBattleAllocations(tokenAllocations[j], reward.timestamp);
+            for (uint256 j = 0; j < tokenAllocationsArray.length; j++) {
+                TokenBattleAllocation memory tokenBattleAllocation = IMemedBattle(factory.getMemedBattle()).getUserTokenBattleAllocations(tokenAllocationsArray[j], reward.timestamp);
                 if (tokenBattleAllocation.winCount > tokenBattleAllocation.loseCount) {
                     change += ENGAGEMENT_REWARDS_CHANGE * (tokenBattleAllocation.winCount - tokenBattleAllocation.loseCount);
                 }

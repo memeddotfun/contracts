@@ -17,7 +17,9 @@ const config: HardhatUserConfig = {
       },
       evmVersion: "cancun",
       viaIR: false,
-      chainDescriptors: {
+    },
+    },
+    chainDescriptors: {
         84532: {
           name: "Base Sepolia",
           blockExplorers: {
@@ -29,8 +31,6 @@ const config: HardhatUserConfig = {
         },
         }
       },
-    },
-  },
   networks: {
     base: {
       type: "http",
