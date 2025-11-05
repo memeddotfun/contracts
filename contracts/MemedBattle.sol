@@ -49,11 +49,13 @@ contract MemedBattle is Ownable, ReentrancyGuard {
     function challengeBattle(address _memeA, address _memeB) external nonReentrant {
         TokenData memory tokenA = factory.getByToken(_memeA);
         require(tokenA.token != address(0), "MemeA is not minted");
+        require(tokenA.warriorNFT != address(0), "MemeA NFT not deployed");
         require(tokenA.token != _memeB, "Cannot battle yourself");
         require(tokenA.creator == msg.sender || (msg.sender != owner() && tokenA.isClaimedByCreator), "Unauthorized");
         require(!battleCooldowns[tokenA.token].onBattle || block.timestamp > battleCooldowns[tokenA.token].cooldownEndTime, "MemeA is on battle or cooldown");
         TokenData memory tokenB = factory.getByToken(_memeB);
         require(tokenB.token != address(0), "MemeB is not minted");
+        require(tokenB.warriorNFT != address(0), "MemeB NFT not deployed");
         require(!battleCooldowns[tokenB.token].onBattle || block.timestamp > battleCooldowns[tokenB.token].cooldownEndTime, "MemeB is on battle or cooldown");
         Battle storage b = battles[battleCount];
         b.battleId = battleCount;
@@ -91,6 +93,7 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         battleCooldowns[battle.memeB].onBattle = true;
         battleCooldowns[battle.memeA].cooldownEndTime = block.timestamp + BATTLE_COOLDOWN;
         battleCooldowns[battle.memeB].cooldownEndTime = block.timestamp + BATTLE_COOLDOWN;
+        battleResolver.addBattleIdsToResolve(_battleId);
         emit BattleStarted(_battleId, battle.memeA, battle.memeB);
     }
 
@@ -293,6 +296,10 @@ contract MemedBattle is Ownable, ReentrancyGuard {
     
     function getResolver() external view returns (address) {
         return address(battleResolver);
+    }
+    
+    function getFactory() external view returns (address) {
+        return address(factory);
     }
     
     function getBattles() external view returns (Battle[] memory) {

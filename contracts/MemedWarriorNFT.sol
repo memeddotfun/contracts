@@ -104,21 +104,6 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
         return tokenId;
     }
     
-    /**
-     * @dev Allocate NFT (called by user when they want to allocate NFTs to a battle)
-     */
-    function _allocateWarrior(uint256 _tokenId) internal {
-        require(_exists(_tokenId), "NFT does not exist");
-        require(!warriors[_tokenId].allocated, "NFT already allocated");
-        
-        address owner = ownerOf(_tokenId);
-        require(owner == msg.sender, "Not the owner");
-        warriors[_tokenId].allocated = true;
-        
-        
-        emit WarriorAllocated(_tokenId, owner);
-    }
-
     /** Get back the warrior NFTs to the user if they win the battle
      * @dev Get back the warrior NFTs to the user if they win the battle
      */
@@ -234,6 +219,6 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
     }
 
     function _exists(uint256 _tokenId) internal view returns (bool) {
-        return _tokenId <= currentTokenId;
+        return _tokenId > 0 && _tokenId <= currentTokenId;
     }
 }

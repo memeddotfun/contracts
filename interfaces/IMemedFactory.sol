@@ -7,7 +7,7 @@ interface IMemedFactory {
     function getByToken(
         address _token
     ) external view returns (TokenData memory);
-    function updateHeat(address _token, uint256 _heat) external;
+    function updateHeat(HeatUpdate[] calldata _heatUpdates) external;
     function swap(
         uint256 _amount,
         address[] calldata _path,

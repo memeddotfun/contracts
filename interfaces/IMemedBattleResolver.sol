@@ -4,6 +4,6 @@ pragma solidity ^0.8.28;
 import "../structs/BattleStructs.sol";
 
 interface IMemedBattleResolver {
-    function addBattleIdsToResolve(uint128 _battleId) external;
-    function resolveBattle(uint128 _battleId) external;
+    function addBattleIdsToResolve(uint256 _battleId) external;
+    function resolveBattle(uint256 _battleId) external;
 }

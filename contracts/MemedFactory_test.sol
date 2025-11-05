@@ -138,7 +138,7 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
 
     function updateHeat(HeatUpdate[] calldata _heatUpdates) public {
         require(
-            msg.sender == address(memedBattle) || msg.sender == owner(),
+            msg.sender == address(memedBattle) || msg.sender == memedBattle.getResolver() || msg.sender == owner(),
             "unauthorized"
         );
 
@@ -208,7 +208,7 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
     }
 
     function battleUpdate(address _winner, address _loser) external {
-        require(msg.sender == address(memedBattle), "unauthorized");
+        require(msg.sender == address(memedBattle) || msg.sender == memedBattle.getResolver(), "unauthorized");
         TokenRewardData storage token = tokenRewardData[
             memedTokenSale.tokenIdByAddress(_winner)
         ];

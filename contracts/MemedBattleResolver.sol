@@ -39,35 +39,60 @@ contract MemedBattleResolver is Ownable {
         require(block.timestamp >= battle.endTime, "Battle not ended");
         require(battle.status == BattleStatus.STARTED, "Battle not started");
         require(msg.sender == owner(), "Unauthorized");
+        
         IMemedFactory factory = IMemedFactory(battleContract.getFactory());
-        // Get engagement scores (heat) from factory
-        uint256 heatA = factory.getHeat(battle.memeA) - battle.heatA;
-        uint256 heatB = factory.getHeat(battle.memeB) - battle.heatB;
         
-        // Calculate final score: 60% engagement + 40% value
-        uint256 valueScoreA = IMemedWarriorNFT(factory.getWarriorNFT(battle.memeA)).getCurrentPrice() * battle.memeANftsAllocated;
-        uint256 valueScoreB = IMemedWarriorNFT(factory.getWarriorNFT(battle.memeB)).getCurrentPrice() * battle.memeBNftsAllocated;
+        // Validate warrior NFTs exist
+        require(
+            factory.getWarriorNFT(battle.memeA) != address(0) && 
+            factory.getWarriorNFT(battle.memeB) != address(0), 
+            "Warrior NFTs not deployed"
+        );
         
-        uint256 finalScoreA = (heatA * ENGAGEMENT_WEIGHT + valueScoreA * VALUE_WEIGHT) / 100;
-        uint256 finalScoreB = (heatB * ENGAGEMENT_WEIGHT + valueScoreB * VALUE_WEIGHT) / 100;
+        // Calculate final scores
+        uint256 finalScoreA = _calculateScore(factory, battle.memeA, battle.heatA, battle.memeANftsAllocated);
+        uint256 finalScoreB = _calculateScore(factory, battle.memeB, battle.heatB, battle.memeBNftsAllocated);
         
         address actualWinner = finalScoreA >= finalScoreB ? battle.memeA : battle.memeB;
         address actualLoser = actualWinner == battle.memeA ? battle.memeB : battle.memeA;
         
-        // Get 5% of LOSER's token balance in EngageToEarn pool to swap to winner tokens
-        uint256 loserTokenAmount = IMemedEngageToEarn(factory.getMemedEngageToEarn()).getBattleRewardPool(actualLoser);
-        uint256 totalReward;
-        if (loserTokenAmount > 0) {
-            // Swap loser tokens to winner tokens and return the winner token amount received
-            totalReward = IMemedEngageToEarn(factory.getMemedEngageToEarn()).transferBattleRewards(actualLoser, actualWinner, loserTokenAmount);
-        }
+        // Get battle rewards
+        uint256 totalReward = _processBattleRewards(factory, actualLoser, actualWinner);
         
         // Update heat for winner
-        factory.updateHeat(actualWinner, 20000);
+        HeatUpdate[] memory heatUpdates = new HeatUpdate[](1);
+        heatUpdates[0] = HeatUpdate(actualWinner, 20000);
+        factory.updateHeat(heatUpdates);
         factory.battleUpdate(actualWinner, actualLoser);
+        
         battleContract.resolveBattle(_battleId, actualWinner, totalReward);
         _battleIdResolved(_battleId);
         emit BattleResolved(_battleId, actualWinner, actualLoser, totalReward);
+    }
+    
+    function _calculateScore(
+        IMemedFactory factory,
+        address token,
+        uint256 initialHeat,
+        uint256 nftsAllocated
+    ) internal view returns (uint256) {
+        uint256 heatScore = factory.getHeat(token) - initialHeat;
+        uint256 valueScore = IMemedWarriorNFT(factory.getWarriorNFT(token)).getCurrentPrice() * nftsAllocated;
+        return (heatScore * ENGAGEMENT_WEIGHT + valueScore * VALUE_WEIGHT) / 100;
+    }
+    
+    function _processBattleRewards(
+        IMemedFactory factory,
+        address loser,
+        address winner
+    ) internal returns (uint256) {
+        IMemedEngageToEarn engageToEarn = IMemedEngageToEarn(factory.getMemedEngageToEarn());
+        uint256 loserTokenAmount = engageToEarn.getBattleRewardPool(loser);
+        
+        if (loserTokenAmount > 0) {
+            return engageToEarn.transferBattleRewards(loser, winner, loserTokenAmount);
+        }
+        return 0;
     }
 
     function _battleIdResolved(uint256 _battleId) internal {
