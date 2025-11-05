@@ -6,7 +6,7 @@ import "dotenv/config";
 
 const { ALCHEMY_API_KEY, WALLET_KEY, ETHERSCAN_API_KEY } = process.env;
 
-const config = {
+const config: HardhatUserConfig = {
   plugins: [hardhatToolboxViemPlugin, hardhatVerifyPlugin],
   solidity: {
     version: "0.8.28",
@@ -17,6 +17,18 @@ const config = {
       },
       evmVersion: "cancun",
       viaIR: false,
+      chainDescriptors: {
+        84532: {
+          name: "Base Sepolia",
+          blockExplorers: {
+            etherscan: {
+              name: "Base Scan",
+              url: "https://sepolia.basescan.org",
+              apiUrl: "https://api.etherscan.io/v2/api",
+            }
+        },
+        }
+      },
     },
   },
   networks: {
@@ -33,12 +45,11 @@ const config = {
       chainId: 84532,
     },
   },
-  etherscan: {
-    apiKey: ETHERSCAN_API_KEY || "",
+  verify: {
+    etherscan: {
+      apiKey: ETHERSCAN_API_KEY,
+    },
   },
-  sourcify: {
-    enabled: false,
-  },
-};
+}
 
 export default config;
