@@ -20,7 +20,6 @@ interface IMemedBattle {
         address _user,
         address _meme
     ) external view returns (UserBattleAllocation memory);
-    function getBackWarrior(uint256 _battleId, address _user) external;
     function allocateNFTsToBattle(
         uint256 _battleId,
         address _user,
@@ -30,4 +29,5 @@ interface IMemedBattle {
     function getFactory() external view returns (address);
     function getResolver() external view returns (address);
     function resolveBattle(uint256 _battleId, address _actualWinner, uint256 _totalReward) external;
+    function isNftReturnable(address _token, uint256 _nftId) external view returns (bool);
 }

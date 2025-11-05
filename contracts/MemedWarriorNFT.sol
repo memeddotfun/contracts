@@ -112,6 +112,7 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
         require(!warriors[_tokenId].allocated, "NFT already allocated");
         
         address owner = ownerOf(_tokenId);
+        require(owner == msg.sender, "Not the owner");
         warriors[_tokenId].allocated = true;
         
         
@@ -121,25 +122,22 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
     /** Get back the warrior NFTs to the user if they win the battle
      * @dev Get back the warrior NFTs to the user if they win the battle
      */
-    function getBackWarrior(uint256 _battleId) external {
-        Battle memory battle = memedBattle.getBattle(_battleId);
-        require(battle.winner == memedToken, "Not the winner");
-        UserBattleAllocation memory allocation = memedBattle.getBattleAllocations(_battleId, msg.sender, memedToken);
-        require(allocation.nftsIds.length > 0, "No allocation found");
-        memedBattle.getBackWarrior(_battleId, msg.sender);
-        for (uint256 i = 0; i < allocation.nftsIds.length; i++) {
-            if(IMemedEngageToEarn(factory.getMemedEngageToEarn()).getUserEngagementReward(msg.sender, memedToken) > 0) {
-                continue;
-            }
-            warriors[allocation.nftsIds[i]].allocated = false;
-        }
+    function getBackWarrior(uint256 _nftId) external {
+        require(memedBattle.isNftReturnable(memedToken , _nftId), "NFT not returnable");
+        warriors[_nftId].allocated = false;
+        emit WarriorGetBack(_nftId, msg.sender);
     }
 
-    function allocateNFTsToBattle(uint128 _battleId, address _user, address _supportedMeme, uint256[] calldata _nftsIds) external {
+    function allocateNFTsToBattle(address _user, uint256[] calldata _nftsIds) external {
+        require(msg.sender == address(memedBattle), "Only battle contract");
         for (uint256 i = 0; i < _nftsIds.length; i++) {
-            _allocateWarrior(_nftsIds[i]);
+            require(_exists(_nftsIds[i]), "NFT does not exist");
+            require(!warriors[_nftsIds[i]].allocated, "NFT already allocated");
+            address owner = ownerOf(_nftsIds[i]);
+            require(owner == _user, "Not the owner");
+            warriors[_nftsIds[i]].allocated = true;
+            emit WarriorAllocated(_nftsIds[i], owner);
         }
-        memedBattle.allocateNFTsToBattle(_battleId, _user, _supportedMeme, _nftsIds);
     }
     
     /**

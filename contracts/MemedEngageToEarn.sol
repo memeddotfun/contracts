@@ -79,6 +79,11 @@ contract MemedEngageToEarn is Ownable {
         return (balance * CYCLE_REWARD_PERCENTAGE) / 100;
     }
 
+    function getNftReward(address _token) external view returns (uint256) {
+        uint256 nftPrice = IMemedWarriorNFT(factory.getWarriorNFT(_token)).getCurrentPrice();
+        return (nftPrice * ENGAGEMENT_REWARDS_PER_NFT_PERCENTAGE) / 100;
+    }
+
     function getUserEngagementReward() public view returns (EngagementRewardClaim[] memory) {
         // First pass: count valid claims
         uint256 validClaimCount = 0;

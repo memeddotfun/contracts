@@ -100,7 +100,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         token.ticker = _ticker;
         token.description = _description;
         token.image = _image;
-        token.isClaimedByCreator = _creator == address(0);
+        token.isClaimedByCreator = _creator != address(0);
         tokenRewardData[id].lastRewardAt = INITIAL_REWARDS_PER_HEAT;
         emit TokenCreated(
             id,

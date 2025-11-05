@@ -115,8 +115,12 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         require(block.timestamp < battle.endTime, "Battle ended");
         require(battle.status == BattleStatus.STARTED, "Battle not started");
         require(_supportedMeme == battle.memeA || _supportedMeme == battle.memeB, "Invalid meme");
+        require(msg.sender == _user, "Only user can allocate");
+        
+        // Call NFT contract to mark warriors as allocated
         address nftWarrior = factory.getWarriorNFT(_supportedMeme);
-        require(nftWarrior == msg.sender, "Unauthorized");
+        IMemedWarriorNFT(nftWarrior).allocateNFTsToBattle(_user, _nftsIds);
+        
         UserBattleAllocation storage allocation = battleAllocations[_battleId][_user][_supportedMeme];
         if(allocation.nftsIds.length == 0) {
             allocation.battleId = _battleId;
@@ -154,15 +158,6 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         emit UserAllocated(_battleId, msg.sender, _supportedMeme, _nftsIds);
     }
 
-    function getBackWarrior(uint256 _battleId, address _user) external {
-        Battle storage battle = battles[_battleId];
-        address memeA = IMemedWarriorNFT(msg.sender).memedToken();
-        require(battle.winner == memeA, "Not the winner");
-        UserBattleAllocation storage allocation = battleAllocations[_battleId][_user][memeA];
-        require(allocation.nftsIds.length > 0, "No allocation found");
-        require(!allocation.getBack, "Already got back");
-        allocation.getBack = true;
-    }
     function getUserTokenBattleAllocations(uint256 _tokenId, uint256 _until) external view returns (TokenBattleAllocation memory) {
         TokenBattleAllocation memory allocation;
         for (uint256 i = 0; i < nftBattleAllocations[_tokenId].length; i++) {
@@ -346,6 +341,25 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         require(battle.winner == battle.memeA || battle.winner == battle.memeB, "Not the winner");
         require(!battleAllocations[_battleId][_user][battle.winner].claimed, "Already claimed");
         return battle.totalReward * battleAllocations[_battleId][_user][battle.winner].nftsIds.length / (battle.winner == battle.memeA ? battle.memeANftsAllocated : battle.memeBNftsAllocated);
+    }
+
+    function isNftReturnable(address _token, uint256 _nftId) external view returns (bool) {
+        uint256 nftReward = IMemedEngageToEarn(factory.getMemedEngageToEarn()).getNftReward(_token);
+        uint256 engagementRewardChange = IMemedEngageToEarn(factory.getMemedEngageToEarn()).ENGAGEMENT_REWARDS_CHANGE();
+        UserNftBattleAllocation[] memory nftAllocations = nftBattleAllocations[_nftId];
+        for (uint256 i = 0; i < nftAllocations.length; i++) {
+            Battle storage battle = battles[nftAllocations[i].battleId];
+            if(battle.status == BattleStatus.STARTED) {
+                return false;
+            }
+            if(nftAllocations[i].supportedMeme == battle.winner) {
+                nftReward += engagementRewardChange;
+            }else{
+                nftReward -= engagementRewardChange;
+            }
+        }
+        return nftReward > 0;
+
     }
 
     function getUserTokenAllocations(address _user) external view returns (uint256[] memory) {
