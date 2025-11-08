@@ -294,27 +294,50 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
         address _to
     ) external nonReentrant returns (uint256) {
         require(
-            msg.sender == address(memedBattle) ||
-                msg.sender == address(memedEngageToEarn),
-            "Only battle or engage to earn can swap"
+            msg.sender == address(memedEngageToEarn),
+            "Only engage to earn can swap"
         );
         require(_path.length >= 2, "Invalid path");
         
         IERC20(_path[0]).approve(address(swapRouter), _amount);
         
-        ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
-            tokenIn: _path[0],
-            tokenOut: _path[_path.length - 1],
-            fee: POOL_FEE,
-            recipient: _to,
-            deadline: block.timestamp + 300,
-            amountIn: _amount,
-            amountOutMinimum: 0,
-            sqrtPriceLimitX96: 0
-        });
+        address WETH = 0xc190e6F26cE14e40D30251fDe25927A73a5D58b6; 
         
-        uint256 amountOut = swapRouter.exactInputSingle(params);
-        return amountOut;
+        if (_path[0] != WETH && _path[_path.length - 1] != WETH) {
+            bytes memory path = abi.encodePacked(
+                _path[0],           
+                POOL_FEE,               
+                WETH,               
+                POOL_FEE,           
+                _path[_path.length - 1]  
+            );
+            
+            ISwapRouter.ExactInputParams memory params = ISwapRouter.ExactInputParams({
+                path: path,
+                recipient: _to,
+                deadline: block.timestamp + 300,
+                amountIn: _amount,
+                amountOutMinimum: 0
+            });
+            
+            uint256 amountOut = swapRouter.exactInput(params);
+            return amountOut;
+        } else {
+            // Single-hop swap (one of the tokens is WETH)
+            ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
+                tokenIn: _path[0],
+                tokenOut: _path[_path.length - 1],
+                fee: POOL_FEE,
+                recipient: _to,
+                deadline: block.timestamp + 300,
+                amountIn: _amount,
+                amountOutMinimum: 0,
+                sqrtPriceLimitX96: 0
+            });
+            
+            uint256 amountOut = swapRouter.exactInputSingle(params);
+            return amountOut;
+        }
     }
 
     /**

@@ -160,20 +160,16 @@ contract MemedFactory is Ownable, ReentrancyGuard {
                 "Heat update too frequent"
             );
 
-            // Store old heat for comparison
             uint256 oldHeat = tokenReward.heat;
             uint256 newHeat = _heatUpdates[i].heat;
             
-            // Update heat value and timestamp
             tokenReward.heat = newHeat;
             tokenReward.lastHeatUpdate = block.timestamp;
             
-            // Initialize lastRewardAt if this is first update after creation
             if (tokenReward.lastRewardAt == INITIAL_REWARDS_PER_HEAT && oldHeat == 0) {
                 tokenReward.lastRewardAt = 0;
             }
 
-            // Check if engagement rewards should be unlocked
             if (
                 (tokenReward.heat - tokenReward.lastRewardAt) >=
                 ENGAGEMENT_REWARDS_PER_NEW_HEAT &&
@@ -183,7 +179,6 @@ contract MemedFactory is Ownable, ReentrancyGuard {
                 tokenReward.lastRewardAt = tokenReward.heat;
             }
 
-            // Check if creator incentives should be unlocked
             if (
                 token.isClaimedByCreator &&
                 tokenReward.heat - tokenReward.creatorIncentivesUnlockedAt >=
@@ -279,7 +274,6 @@ contract MemedFactory is Ownable, ReentrancyGuard {
             })
         );
         
-        // Store the LP NFT token ID for future fee collection
         lpTokenIds[_token] = tokenId;
     }
 
@@ -289,27 +283,49 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         address _to
     ) external nonReentrant returns (uint256) {
         require(
-            msg.sender == address(memedBattle) ||
-                msg.sender == address(memedEngageToEarn),
-            "Only battle or engage to earn can swap"
+            msg.sender == address(memedEngageToEarn),
+            "Only engage to earn can swap"
         );
         require(_path.length >= 2, "Invalid path");
         
         IERC20(_path[0]).approve(address(swapRouter), _amount);
         
-        ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
-            tokenIn: _path[0],
-            tokenOut: _path[_path.length - 1],
-            fee: POOL_FEE,
-            recipient: _to,
-            deadline: block.timestamp + 300,
-            amountIn: _amount,
-            amountOutMinimum: 0,
-            sqrtPriceLimitX96: 0
-        });
+        address WETH = 0x4200000000000000000000000000000000000006;
         
-        uint256 amountOut = swapRouter.exactInputSingle(params);
-        return amountOut;
+        if (_path[0] != WETH && _path[_path.length - 1] != WETH) {
+            bytes memory path = abi.encodePacked(
+                _path[0],           
+                POOL_FEE,               
+                WETH,               
+                POOL_FEE,           
+                _path[_path.length - 1]  
+            );
+            
+            ISwapRouter.ExactInputParams memory params = ISwapRouter.ExactInputParams({
+                path: path,
+                recipient: _to,
+                deadline: block.timestamp + 300,
+                amountIn: _amount,
+                amountOutMinimum: 0
+            });
+            
+            uint256 amountOut = swapRouter.exactInput(params);
+            return amountOut;
+        } else {
+            ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
+                tokenIn: _path[0],
+                tokenOut: _path[_path.length - 1],
+                fee: POOL_FEE,
+                recipient: _to,
+                deadline: block.timestamp + 300,
+                amountIn: _amount,
+                amountOutMinimum: 0,
+                sqrtPriceLimitX96: 0
+            });
+            
+            uint256 amountOut = swapRouter.exactInputSingle(params);
+            return amountOut;
+        }
     }
 
     /**

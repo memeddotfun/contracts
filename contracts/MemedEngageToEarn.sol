@@ -193,6 +193,7 @@ contract MemedEngageToEarn is Ownable, ReentrancyGuard {
     
     /**
      * @dev Swap loser tokens to winner tokens for battle rewards
+     * Routes through WETH: loser -> WETH -> winner
      * @param _loser Loser token address (token to swap from)
      * @param _winner Winner token address (token to swap to)
      * @param _loserAmount Amount of loser tokens to swap
@@ -204,7 +205,7 @@ contract MemedEngageToEarn is Ownable, ReentrancyGuard {
         // Transfer loser tokens to factory for swap
         require(IERC20(_loser).transfer(address(factory), _loserAmount), "Transfer to factory failed");
         
-        // Swap loser tokens to winner tokens
+        // Swap loser tokens to winner tokens (factory will route through WETH)
         address[] memory path = new address[](2);
         path[0] = _loser;
         path[1] = _winner;
