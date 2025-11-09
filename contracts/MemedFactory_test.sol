@@ -337,62 +337,44 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
         address[] calldata _path,
         address _to
     ) external nonReentrant returns (uint256) {
+        /*require(
+            msg.sender == address(memedEngageToEarn),
+            "Only engage to earn can swap"
+        );*/
         require(_path.length >= 2, "Invalid path");
         address tokenIn = _path[0];
         address tokenOut = _path[_path.length - 1];
 
+        address p1 = IUniswapV3Factory(uniswapV3Factory).getPool(
+            tokenIn,
+            MEMED_TEST_ETH,
+            POOL_FEE
+        );
+        address p2 = IUniswapV3Factory(uniswapV3Factory).getPool(
+            MEMED_TEST_ETH,
+            tokenOut,
+            POOL_FEE
+        );
+        require(p1 != address(0) && p2 != address(0), "missing pool");
+
         IERC20(tokenIn).approve(address(swapRouter), _amount);
 
-        if (tokenIn != MEMED_TEST_ETH && tokenOut != MEMED_TEST_ETH) {
-            address p1 = IUniswapV3Factory(uniswapV3Factory).getPool(
-                tokenIn,
-                MEMED_TEST_ETH,
-                POOL_FEE
+        bytes memory path = abi.encodePacked(
+            tokenIn,
+            POOL_FEE,
+            MEMED_TEST_ETH,
+            POOL_FEE,
+            tokenOut
+        );
+        return
+            swapRouter.exactInput(
+                ISwapRouter.ExactInputParams({
+                    path: path,
+                    recipient: _to,
+                    amountIn: _amount,
+                    amountOutMinimum: 0
+                })
             );
-            address p2 = IUniswapV3Factory(uniswapV3Factory).getPool(
-                MEMED_TEST_ETH,
-                tokenOut,
-                POOL_FEE
-            );
-            require(p1 != address(0) && p2 != address(0), "missing pool");
-            bytes memory path = abi.encodePacked(
-                tokenIn,
-                POOL_FEE,
-                MEMED_TEST_ETH,
-                POOL_FEE,
-                tokenOut
-            );
-            return
-                swapRouter.exactInput(
-                    ISwapRouter.ExactInputParams({
-                        path: path,
-                        recipient: _to,
-                        deadline: block.timestamp + 300,
-                        amountIn: _amount,
-                        amountOutMinimum: 0
-                    })
-                );
-        } else {
-            address pool = IUniswapV3Factory(uniswapV3Factory).getPool(
-                tokenIn,
-                tokenOut,
-                POOL_FEE
-            );
-            require(pool != address(0), "missing pool");
-            return
-                swapRouter.exactInputSingle(
-                    ISwapRouter.ExactInputSingleParams({
-                        tokenIn: tokenIn,
-                        tokenOut: tokenOut,
-                        fee: POOL_FEE,
-                        recipient: _to,
-                        deadline: block.timestamp + 300,
-                        amountIn: _amount,
-                        amountOutMinimum: 0,
-                        sqrtPriceLimitX96: 0
-                    })
-                );
-        }
     }
 
     /**

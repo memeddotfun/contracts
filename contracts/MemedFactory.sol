@@ -308,43 +308,41 @@ function _addLiquidityToPool(
             "Only engage to earn can swap"
         );
         require(_path.length >= 2, "Invalid path");
+
+        address tokenIn = _path[0];
+        address tokenOut = _path[_path.length - 1];
+
+        address p1 = IUniswapV3Factory(uniswapV3Factory).getPool(
+            tokenIn,
+            WETH,
+            POOL_FEE
+        );
+        address p2 = IUniswapV3Factory(uniswapV3Factory).getPool(
+            WETH,
+            tokenOut,
+            POOL_FEE
+        );
+        require(p1 != address(0) && p2 != address(0), "missing pool");
+
+        IERC20(tokenIn).approve(address(swapRouter), _amount);
         
-        IERC20(_path[0]).approve(address(swapRouter), _amount);
-        
-        if (_path[0] != WETH && _path[_path.length - 1] != WETH) {
             bytes memory path = abi.encodePacked(
-                _path[0],           
+                tokenIn,           
                 POOL_FEE,               
                 WETH,               
                 POOL_FEE,           
-                _path[_path.length - 1]  
+                tokenOut  
             );
             
             ISwapRouter.ExactInputParams memory params = ISwapRouter.ExactInputParams({
                 path: path,
                 recipient: _to,
-                deadline: block.timestamp + 300,
                 amountIn: _amount,
                 amountOutMinimum: 0
             });
             
             uint256 amountOut = swapRouter.exactInput(params);
             return amountOut;
-        } else {
-            ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
-                tokenIn: _path[0],
-                tokenOut: _path[_path.length - 1],
-                fee: POOL_FEE,
-                recipient: _to,
-                deadline: block.timestamp + 300,
-                amountIn: _amount,
-                amountOutMinimum: 0,
-                sqrtPriceLimitX96: 0
-            });
-            
-            uint256 amountOut = swapRouter.exactInputSingle(params);
-            return amountOut;
-        }
     }
 
     /**
