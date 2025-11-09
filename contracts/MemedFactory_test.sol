@@ -273,120 +273,125 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
         memedTokenSale.completeFairLaunch(_id, _token, pool);
     }
 
-function _createAndInitializePool(
-    address _token
-) internal returns (address pool) {
-    uint160 sqrtPriceX96_token0 = 50080217652889365717295;    
-    uint160 sqrtPriceX96_token1 = 125200544132223414293237760000; 
+    function _sqrt(uint256 x) internal pure returns (uint256) {
+        if (x == 0) return 0;
+        uint256 z = (x + 1) / 2;
+        uint256 y = x;
+        while (z < y) {
+            y = z;
+            z = (x / z + z) / 2;
+        }
+        return y;
+    }
 
-    (address token0, address token1) = _token < MEMED_TEST_ETH
-        ? (_token, MEMED_TEST_ETH)
-        : (MEMED_TEST_ETH, _token);
+    function _encodeSqrtRatioX96(
+        uint256 amount1,
+        uint256 amount0
+    ) internal pure returns (uint160) {
+        require(amount0 > 0 && amount1 > 0, "bad ratio");
+        uint256 ratioX192 = (uint256(amount1) << 192) / amount0;
+        return uint160(_sqrt(ratioX192));
+    }
 
-    pool = IUniswapV3Factory(uniswapV3Factory).createPool(token0, token1, POOL_FEE);
+    function _createAndInitializePool(
+        address _token
+    ) internal returns (address pool) {
+        pool = IUniswapV3Factory(uniswapV3Factory).createPool(
+            MEMED_TEST_ETH,
+            _token,
+            POOL_FEE
+        );
+        uint160 sqrtP = _encodeSqrtRatioX96(100_000_000 ether, 40 ether);
+        IUniswapV3Pool(pool).initialize(sqrtP);
+        return pool;
+    }
 
-    uint160 initialPrice = token0 == _token ? sqrtPriceX96_token0 : sqrtPriceX96_token1;
+    function _addLiquidityToPool(
+        address _token,
+        uint256 tokenAmount,
+        uint256 ethAmount
+    ) internal {
+        IERC20(MEMED_TEST_ETH).approve(address(positionManager), ethAmount);
+        IERC20(_token).approve(address(positionManager), tokenAmount);
 
-    IUniswapV3Pool(pool).initialize(initialPrice);
-    return pool;
-}
-
-/**
- * @notice Adds liquidity to the initialized pool
- * @dev Adds 100M tokens + 40 ETH for price match with bonding curve
- */
-function _addLiquidityToPool(
-    address _token,
-    uint256 tokenAmount,  
-    uint256 ethAmount     
-) internal {
-    (address token0, address token1) = _token < MEMED_TEST_ETH
-        ? (_token, MEMED_TEST_ETH)
-        : (MEMED_TEST_ETH, _token);
-    (uint256 amount0, uint256 amount1) = _token < MEMED_TEST_ETH
-        ? (tokenAmount, ethAmount)
-        : (ethAmount, tokenAmount);
-
-    IERC20(token0).approve(address(positionManager), amount0);
-    IERC20(token1).approve(address(positionManager), amount1);
-
-    (uint256 tokenId, , , ) = positionManager.mint(
-        INonfungiblePositionManager.MintParams({
-            token0: token0,
-            token1: token1,
-            fee: POOL_FEE,
-            tickLower: -887220,  
-            tickUpper: 887220,   
-            amount0Desired: amount0,
-            amount1Desired: amount1,
-            amount0Min: 0,       
-            amount1Min: 0,       
-            recipient: address(this),
-            deadline: block.timestamp + 300
-        })
-    );
-
-    lpTokenIds[_token] = tokenId;
-}
+        (uint256 tokenId, , , ) = positionManager.mint(
+            INonfungiblePositionManager.MintParams({
+                token0: MEMED_TEST_ETH,
+                token1: _token,
+                fee: POOL_FEE,
+                tickLower: -887220,
+                tickUpper: 887220,
+                amount0Desired: ethAmount,
+                amount1Desired: tokenAmount,
+                amount0Min: 0,
+                amount1Min: 0,
+                recipient: address(this),
+                deadline: block.timestamp + 300
+            })
+        );
+        lpTokenIds[_token] = tokenId;
+    }
 
     function swap(
         uint256 _amount,
         address[] calldata _path,
         address _to
     ) external nonReentrant returns (uint256) {
-        /*        require(
-            msg.sender == address(memedEngageToEarn),
-            "Only engage to earn can swap"
-        );*/
         require(_path.length >= 2, "Invalid path");
+        address tokenIn = _path[0];
+        address tokenOut = _path[_path.length - 1];
 
-        IERC20(_path[0]).approve(address(swapRouter), _amount);
+        IERC20(tokenIn).approve(address(swapRouter), _amount);
 
-        address WETH = 0xc190e6F26cE14e40D30251fDe25927A73a5D58b6;
-
-        if (_path[0] != WETH && _path[_path.length - 1] != WETH) {
-            bytes memory path = abi.encodePacked(
-                _path[0],
-                POOL_FEE,
-                WETH,
-                POOL_FEE,
-                _path[_path.length - 1]
+        if (tokenIn != MEMED_TEST_ETH && tokenOut != MEMED_TEST_ETH) {
+            address p1 = IUniswapV3Factory(uniswapV3Factory).getPool(
+                tokenIn,
+                MEMED_TEST_ETH,
+                POOL_FEE
             );
-
-            ISwapRouter.ExactInputParams memory params = ISwapRouter
-                .ExactInputParams({
-                    path: path,
-                    recipient: _to,
-                    deadline: block.timestamp + 300,
-                    amountIn: _amount,
-                    amountOutMinimum: 0
-                });
-            try swapRouter.exactInput(params) returns (uint256 amountOut) {
-                return amountOut;
-            } catch {
-                revert("multi hop swap failed");
-            }
+            address p2 = IUniswapV3Factory(uniswapV3Factory).getPool(
+                MEMED_TEST_ETH,
+                tokenOut,
+                POOL_FEE
+            );
+            require(p1 != address(0) && p2 != address(0), "missing pool");
+            bytes memory path = abi.encodePacked(
+                tokenIn,
+                POOL_FEE,
+                MEMED_TEST_ETH,
+                POOL_FEE,
+                tokenOut
+            );
+            return
+                swapRouter.exactInput(
+                    ISwapRouter.ExactInputParams({
+                        path: path,
+                        recipient: _to,
+                        deadline: block.timestamp + 300,
+                        amountIn: _amount,
+                        amountOutMinimum: 0
+                    })
+                );
         } else {
-            // Single-hop swap (one of the tokens is WETH)
-            ISwapRouter.ExactInputSingleParams memory params = ISwapRouter
-                .ExactInputSingleParams({
-                    tokenIn: _path[0],
-                    tokenOut: _path[_path.length - 1],
-                    fee: POOL_FEE,
-                    recipient: _to,
-                    deadline: block.timestamp + 300,
-                    amountIn: _amount,
-                    amountOutMinimum: 0,
-                    sqrtPriceLimitX96: 0
-                });
-
-            try swapRouter.exactInputSingle(params) returns (
-                uint256 amountOut
-            ) {
-                return amountOut;
-            } catch {
-                revert("single hop swap failed");
-            }
+            address pool = IUniswapV3Factory(uniswapV3Factory).getPool(
+                tokenIn,
+                tokenOut,
+                POOL_FEE
+            );
+            require(pool != address(0), "missing pool");
+            return
+                swapRouter.exactInputSingle(
+                    ISwapRouter.ExactInputSingleParams({
+                        tokenIn: tokenIn,
+                        tokenOut: tokenOut,
+                        fee: POOL_FEE,
+                        recipient: _to,
+                        deadline: block.timestamp + 300,
+                        amountIn: _amount,
+                        amountOutMinimum: 0,
+                        sqrtPriceLimitX96: 0
+                    })
+                );
         }
     }
 
