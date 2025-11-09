@@ -296,12 +296,28 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
     function _createAndInitializePool(
         address _token
     ) internal returns (address pool) {
+        (address token0, address token1) = _token < MEMED_TEST_ETH
+            ? (_token, MEMED_TEST_ETH)
+            : (MEMED_TEST_ETH, _token);
+        uint256 amountToken1;
+        uint256 amountToken0;
+
+        if (token0 == MEMED_TEST_ETH) {
+            amountToken1 = 2_500_000_000 ether;
+            amountToken0 = 1 ether;
+        } else {
+            amountToken1 = 1 ether;
+            amountToken0 = 2_500_000_000 ether;
+        }
+
+        uint160 sqrtP = _encodeSqrtRatioX96(amountToken1, amountToken0);
+
         pool = IUniswapV3Factory(uniswapV3Factory).createPool(
-            MEMED_TEST_ETH,
-            _token,
+            token0,
+            token1,
             POOL_FEE
         );
-        uint160 sqrtP = _encodeSqrtRatioX96(100_000_000 ether, 40 ether);
+
         IUniswapV3Pool(pool).initialize(sqrtP);
         return pool;
     }
@@ -311,24 +327,33 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
         uint256 tokenAmount,
         uint256 ethAmount
     ) internal {
-        IERC20(MEMED_TEST_ETH).approve(address(positionManager), ethAmount);
-        IERC20(_token).approve(address(positionManager), tokenAmount);
+        (address token0, address token1) = _token < MEMED_TEST_ETH
+            ? (_token, MEMED_TEST_ETH)
+            : (MEMED_TEST_ETH, _token);
+
+        (uint256 amount0, uint256 amount1) = token0 == _token
+            ? (tokenAmount, ethAmount)
+            : (ethAmount, tokenAmount);
+
+        IERC20(token0).approve(address(positionManager), amount0);
+        IERC20(token1).approve(address(positionManager), amount1);
 
         (uint256 tokenId, , , ) = positionManager.mint(
             INonfungiblePositionManager.MintParams({
-                token0: MEMED_TEST_ETH,
-                token1: _token,
+                token0: token0,
+                token1: token1,
                 fee: POOL_FEE,
                 tickLower: -887220,
                 tickUpper: 887220,
-                amount0Desired: ethAmount,
-                amount1Desired: tokenAmount,
+                amount0Desired: amount0,
+                amount1Desired: amount1,
                 amount0Min: 0,
                 amount1Min: 0,
                 recipient: address(this),
                 deadline: block.timestamp + 300
             })
         );
+
         lpTokenIds[_token] = tokenId;
     }
 

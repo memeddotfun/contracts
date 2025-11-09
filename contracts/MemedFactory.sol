@@ -241,55 +241,86 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         
         memedTokenSale.completeFairLaunch(_id, _token, pool);
     }
-function _createAndInitializePool(
-    address _token
-) internal returns (address pool) {
-    uint160 sqrtPriceX96_token0 = 50080217652889365717295;    
-    uint160 sqrtPriceX96_token1 = 125200544132223414293237760000; 
 
-    (address token0, address token1) = _token < WETH
-        ? (_token, WETH)
-        : (WETH, _token);
+       function _sqrt(uint256 x) internal pure returns (uint256) {
+        if (x == 0) return 0;
+        uint256 z = (x + 1) / 2;
+        uint256 y = x;
+        while (z < y) {
+            y = z;
+            z = (x / z + z) / 2;
+        }
+        return y;
+    }
 
-    pool = IUniswapV3Factory(uniswapV3Factory).createPool(token0, token1, POOL_FEE);
+    function _encodeSqrtRatioX96(
+        uint256 amount1,
+        uint256 amount0
+    ) internal pure returns (uint160) {
+        require(amount0 > 0 && amount1 > 0, "bad ratio");
+        uint256 ratioX192 = (uint256(amount1) << 192) / amount0;
+        return uint160(_sqrt(ratioX192));
+    }
 
-    uint160 initialPrice = token0 == _token ? sqrtPriceX96_token0 : sqrtPriceX96_token1;
+    function _createAndInitializePool(
+        address _token
+    ) internal returns (address pool) {
+        (address token0, address token1) = _token < WETH
+            ? (_token, WETH)
+            : (WETH, _token);
+        uint256 amountToken1;
+        uint256 amountToken0;
 
-    IUniswapV3Pool(pool).initialize(initialPrice);
-    return pool;
-}
+        if (token0 == WETH) {
+            amountToken1 = 2_500_000_000 ether;
+            amountToken0 = 1 ether;
+        } else {
+            amountToken1 = 1 ether;
+            amountToken0 = 2_500_000_000 ether;
+        }
 
-/**
- * @notice Adds liquidity to the initialized pool
- * @dev Adds 100M tokens + 40 ETH for price match with bonding curve
- */
-function _addLiquidityToPool(
+        uint160 sqrtP = _encodeSqrtRatioX96(amountToken1, amountToken0);
+
+        pool = IUniswapV3Factory(uniswapV3Factory).createPool(
+            token0,
+            token1,
+            POOL_FEE
+        );
+
+        IUniswapV3Pool(pool).initialize(sqrtP);
+        return pool;
+    }
+    
+    function _addLiquidityToPool(
     address _token,
-    uint256 tokenAmount,  
-    uint256 ethAmount     
+    uint256 tokenAmount,
+    uint256 ethAmount
 ) internal {
-    (address token0, address token1) = _token < WETH
-        ? (_token, WETH)
+    (address token0, address token1) = 
+        _token < WETH 
+        ? (_token, WETH) 
         : (WETH, _token);
-    (uint256 amount0, uint256 amount1) = _token < WETH
-        ? (tokenAmount, ethAmount)
+
+    (uint256 amount0, uint256 amount1) = 
+        token0 == _token 
+        ? (tokenAmount, ethAmount) 
         : (ethAmount, tokenAmount);
 
-    IWETH(WETH).deposit{value: ethAmount}();
     IERC20(token0).approve(address(positionManager), amount0);
     IERC20(token1).approve(address(positionManager), amount1);
+    IWETH(WETH).deposit{value: ethAmount}();
 
-    (uint256 tokenId, , , ) = positionManager.mint(
+    (uint256 tokenId,,,) = positionManager.mint(
         INonfungiblePositionManager.MintParams({
             token0: token0,
             token1: token1,
             fee: POOL_FEE,
-            tickLower: -887220,  
-            tickUpper: 887220,   
+            tickLower: -887220,
+            tickUpper: 887220,
             amount0Desired: amount0,
             amount1Desired: amount1,
-            amount0Min: 0,       
-            amount1Min: 0,       
+            amount0Min: 0,
+            amount1Min: 0,
             recipient: address(this),
             deadline: block.timestamp + 300
         })
