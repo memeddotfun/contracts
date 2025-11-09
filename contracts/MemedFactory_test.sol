@@ -120,7 +120,9 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
         address _token,
         address _creator
     ) external nonReentrant onlyOwner {
-        TokenData storage token = tokenData[memedTokenSale.tokenIdByAddress(_token)];
+        TokenData storage token = tokenData[
+            memedTokenSale.tokenIdByAddress(_token)
+        ];
         require(token.creator == _creator, "Creator mismatch");
         require(!token.isClaimedByCreator, "Already claimed by creator");
         require(
@@ -129,16 +131,18 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
         );
         token.isClaimedByCreator = true;
         // Reset lastRewardAt to current heat when creator claims
-        TokenRewardData storage rewardData = tokenRewardData[memedTokenSale.tokenIdByAddress(_token)];
+        TokenRewardData storage rewardData = tokenRewardData[
+            memedTokenSale.tokenIdByAddress(_token)
+        ];
         rewardData.lastRewardAt = rewardData.heat;
-        IMemedToken(token.token).claimUnclaimedTokens(
-            token.creator
-        );
+        IMemedToken(token.token).claimUnclaimedTokens(token.creator);
     }
 
     function updateHeat(HeatUpdate[] calldata _heatUpdates) public {
         require(
-            msg.sender == address(memedBattle) || msg.sender == memedBattle.getResolver() || msg.sender == owner(),
+            msg.sender == address(memedBattle) ||
+                msg.sender == memedBattle.getResolver() ||
+                msg.sender == owner(),
             "unauthorized"
         );
 
@@ -155,7 +159,9 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
 
     function _updateHeatInternal(HeatUpdate[] memory _heatUpdates) internal {
         for (uint i = 0; i < _heatUpdates.length; i++) {
-            TokenData storage token = tokenData[memedTokenSale.tokenIdByAddress(_heatUpdates[i].token)];
+            TokenData storage token = tokenData[
+                memedTokenSale.tokenIdByAddress(_heatUpdates[i].token)
+            ];
             require(token.token != address(0), "Token not created");
             TokenRewardData storage tokenReward = tokenRewardData[
                 memedTokenSale.tokenIdByAddress(_heatUpdates[i].token)
@@ -168,13 +174,16 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
             // Store old heat for comparison
             uint256 oldHeat = tokenReward.heat;
             uint256 newHeat = _heatUpdates[i].heat;
-            
+
             // Update heat value and timestamp
             tokenReward.heat = newHeat;
             tokenReward.lastHeatUpdate = block.timestamp;
-            
+
             // Initialize lastRewardAt if this is first update after creation
-            if (tokenReward.lastRewardAt == INITIAL_REWARDS_PER_HEAT && oldHeat == 0) {
+            if (
+                tokenReward.lastRewardAt == INITIAL_REWARDS_PER_HEAT &&
+                oldHeat == 0
+            ) {
                 tokenReward.lastRewardAt = 0;
             }
 
@@ -208,7 +217,11 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
     }
 
     function battleUpdate(address _winner, address _loser) external {
-        require(msg.sender == address(memedBattle) || msg.sender == memedBattle.getResolver(), "unauthorized");
+        require(
+            msg.sender == address(memedBattle) ||
+                msg.sender == memedBattle.getResolver(),
+            "unauthorized"
+        );
         TokenRewardData storage token = tokenRewardData[
             memedTokenSale.tokenIdByAddress(_winner)
         ];
@@ -237,106 +250,143 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
         address _warriorNFT
     ) external onlyOwner {
         TokenData storage token = tokenData[_id];
-        (FairLaunchStatus status, uint256 ethAmount) = memedTokenSale.getFairLaunchData(_id);
-        require(status == FairLaunchStatus.READY_TO_COMPLETE, "Fair launch not ready to complete");
-        
+        (FairLaunchStatus status, uint256 ethAmount) = memedTokenSale
+            .getFairLaunchData(_id);
+        require(
+            status == FairLaunchStatus.READY_TO_COMPLETE,
+            "Fair launch not ready to complete"
+        );
+
         IMemedToken(_token).allocateLp();
         token.token = _token;
         token.warriorNFT = _warriorNFT;
         tokens.push(_token);
         emit TokenCompletedFairLaunch(_id, _token, _warriorNFT);
-        
+
         address pool = _createAndInitializePool(_token);
-        _addLiquidityToPool(_token, IMemedToken(_token).LP_ALLOCATION(), ethAmount);
-        
+        _addLiquidityToPool(
+            _token,
+            IMemedToken(_token).LP_ALLOCATION(),
+            ethAmount
+        );
+
         memedTokenSale.completeFairLaunch(_id, _token, pool);
     }
-    
-    function _createAndInitializePool(address _token) internal returns (address pool) {
-        pool = uniswapV3Factory.createPool(_token, MEMED_TEST_ETH, POOL_FEE);
-        
-        uint160 sqrtPriceX96 = _token < MEMED_TEST_ETH
-            ? 50108084819137649406
-            : 1582517825267090392187392094;
-        IUniswapV3Pool(pool).initialize(sqrtPriceX96);
-    }
-    
-    function _addLiquidityToPool(address _token, uint256 tokenAmount, uint256 ethAmount) internal {
-        (address token0, address token1) = _token < MEMED_TEST_ETH ? (_token, MEMED_TEST_ETH) : (MEMED_TEST_ETH, _token);
-        (uint256 amount0, uint256 amount1) = _token < MEMED_TEST_ETH ? (tokenAmount, ethAmount) : (ethAmount, tokenAmount);
-        
-        IERC20(token0).approve(address(positionManager), amount0);
-        IERC20(token1).approve(address(positionManager), amount1);
 
-        (uint256 tokenId, , , ) = positionManager.mint(
-            INonfungiblePositionManager.MintParams({
-                token0: token0,
-                token1: token1,
-                fee: POOL_FEE,
-                tickLower: -887220,
-                tickUpper: 887220,
-                amount0Desired: amount0,
-                amount1Desired: amount1,
-                amount0Min: 0,
-                amount1Min: 0,
-                recipient: address(this),
-                deadline: block.timestamp + 300
-            })
-        );
-        
-        // Store the LP NFT token ID for future fee collection
-        lpTokenIds[_token] = tokenId;
-    }
+function _createAndInitializePool(
+    address _token
+) internal returns (address pool) {
+    uint160 sqrtPriceX96_token0 = 50080217652889365717295;    
+    uint160 sqrtPriceX96_token1 = 125200544132223414293237760000; 
+
+    (address token0, address token1) = _token < MEMED_TEST_ETH
+        ? (_token, MEMED_TEST_ETH)
+        : (MEMED_TEST_ETH, _token);
+
+    pool = IUniswapV3Factory(uniswapV3Factory).createPool(token0, token1, POOL_FEE);
+
+    uint160 initialPrice = token0 == _token ? sqrtPriceX96_token0 : sqrtPriceX96_token1;
+
+    IUniswapV3Pool(pool).initialize(initialPrice);
+    return pool;
+}
+
+/**
+ * @notice Adds liquidity to the initialized pool
+ * @dev Adds 100M tokens + 40 ETH for price match with bonding curve
+ */
+function _addLiquidityToPool(
+    address _token,
+    uint256 tokenAmount,  
+    uint256 ethAmount     
+) internal {
+    (address token0, address token1) = _token < MEMED_TEST_ETH
+        ? (_token, MEMED_TEST_ETH)
+        : (MEMED_TEST_ETH, _token);
+    (uint256 amount0, uint256 amount1) = _token < MEMED_TEST_ETH
+        ? (tokenAmount, ethAmount)
+        : (ethAmount, tokenAmount);
+
+    IERC20(token0).approve(address(positionManager), amount0);
+    IERC20(token1).approve(address(positionManager), amount1);
+
+    (uint256 tokenId, , , ) = positionManager.mint(
+        INonfungiblePositionManager.MintParams({
+            token0: token0,
+            token1: token1,
+            fee: POOL_FEE,
+            tickLower: -887220,  
+            tickUpper: 887220,   
+            amount0Desired: amount0,
+            amount1Desired: amount1,
+            amount0Min: 0,       
+            amount1Min: 0,       
+            recipient: address(this),
+            deadline: block.timestamp + 300
+        })
+    );
+
+    lpTokenIds[_token] = tokenId;
+}
 
     function swap(
         uint256 _amount,
         address[] calldata _path,
         address _to
     ) external nonReentrant returns (uint256) {
-        require(
+        /*        require(
             msg.sender == address(memedEngageToEarn),
             "Only engage to earn can swap"
-        );
+        );*/
         require(_path.length >= 2, "Invalid path");
-        
+
         IERC20(_path[0]).approve(address(swapRouter), _amount);
-        
-        address WETH = 0xc190e6F26cE14e40D30251fDe25927A73a5D58b6; 
-        
+
+        address WETH = 0xc190e6F26cE14e40D30251fDe25927A73a5D58b6;
+
         if (_path[0] != WETH && _path[_path.length - 1] != WETH) {
             bytes memory path = abi.encodePacked(
-                _path[0],           
-                POOL_FEE,               
-                WETH,               
-                POOL_FEE,           
-                _path[_path.length - 1]  
+                _path[0],
+                POOL_FEE,
+                WETH,
+                POOL_FEE,
+                _path[_path.length - 1]
             );
-            
-            ISwapRouter.ExactInputParams memory params = ISwapRouter.ExactInputParams({
-                path: path,
-                recipient: _to,
-                deadline: block.timestamp + 300,
-                amountIn: _amount,
-                amountOutMinimum: 0
-            });
-            
-            uint256 amountOut = swapRouter.exactInput(params);
-            return amountOut;
+
+            ISwapRouter.ExactInputParams memory params = ISwapRouter
+                .ExactInputParams({
+                    path: path,
+                    recipient: _to,
+                    deadline: block.timestamp + 300,
+                    amountIn: _amount,
+                    amountOutMinimum: 0
+                });
+            try swapRouter.exactInput(params) returns (uint256 amountOut) {
+                return amountOut;
+            } catch {
+                revert("multi hop swap failed");
+            }
         } else {
             // Single-hop swap (one of the tokens is WETH)
-            ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
-                tokenIn: _path[0],
-                tokenOut: _path[_path.length - 1],
-                fee: POOL_FEE,
-                recipient: _to,
-                deadline: block.timestamp + 300,
-                amountIn: _amount,
-                amountOutMinimum: 0,
-                sqrtPriceLimitX96: 0
-            });
-            
-            uint256 amountOut = swapRouter.exactInputSingle(params);
-            return amountOut;
+            ISwapRouter.ExactInputSingleParams memory params = ISwapRouter
+                .ExactInputSingleParams({
+                    tokenIn: _path[0],
+                    tokenOut: _path[_path.length - 1],
+                    fee: POOL_FEE,
+                    recipient: _to,
+                    deadline: block.timestamp + 300,
+                    amountIn: _amount,
+                    amountOutMinimum: 0,
+                    sqrtPriceLimitX96: 0
+                });
+
+            try swapRouter.exactInputSingle(params) returns (
+                uint256 amountOut
+            ) {
+                return amountOut;
+            } catch {
+                revert("single hop swap failed");
+            }
         }
     }
 
@@ -346,10 +396,12 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
      * @return amount0 Amount of token0 fees collected
      * @return amount1 Amount of token1 fees collected
      */
-    function collectFees(address _token) external onlyOwner returns (uint256 amount0, uint256 amount1) {
+    function collectFees(
+        address _token
+    ) external onlyOwner returns (uint256 amount0, uint256 amount1) {
         uint256 tokenId = lpTokenIds[_token];
         require(tokenId != 0, "No LP position for this token");
-        
+
         (amount0, amount1) = positionManager.collect(
             INonfungiblePositionManager.CollectParams({
                 tokenId: tokenId,

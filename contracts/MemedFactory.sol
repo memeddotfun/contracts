@@ -10,11 +10,14 @@ import "../interfaces/IMemedToken.sol";
 import "../interfaces/IMemedTokenSale.sol";
 import "../interfaces/IMemedEngageToEarn.sol";
 import "../structs/FactoryStructs.sol";
+import "../interfaces/IWETH.sol";
 
 contract MemedFactory is Ownable, ReentrancyGuard {
     uint256 public constant REWARD_PER_ENGAGEMENT = 100000;
     uint256 public constant MAX_ENGAGE_USER_REWARD_PERCENTAGE = 2;
     uint256 public constant MAX_ENGAGE_CREATOR_REWARD_PERCENTAGE = 1;
+
+    address public constant WETH = 0x4200000000000000000000000000000000000006;
 
     // Battle rewards
     uint256 public INITIAL_REWARDS_PER_HEAT = 100000; // 100,000 of heat will be required to unlock the battle rewards
@@ -238,44 +241,62 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         
         memedTokenSale.completeFairLaunch(_id, _token, pool);
     }
-    
-    function _createAndInitializePool(address _token) internal returns (address pool) {
-        address WETH = 0x4200000000000000000000000000000000000006;
-        pool = uniswapV3Factory.createPool(_token, WETH, POOL_FEE);
-        
-        uint160 sqrtPriceX96 = _token < WETH
-            ? 50108084819137649406
-            : 1582517825267090392187392094;
-        IUniswapV3Pool(pool).initialize(sqrtPriceX96);
-    }
-    
-    function _addLiquidityToPool(address _token, uint256 tokenAmount, uint256 ethAmount) internal {
-        address WETH = 0x4200000000000000000000000000000000000006;
-        
-        (address token0, address token1) = _token < WETH ? (_token, WETH) : (WETH, _token);
-        (uint256 amount0, uint256 amount1) = _token < WETH ? (tokenAmount, ethAmount) : (ethAmount, tokenAmount);
-        
-        IERC20(token0).approve(address(positionManager), amount0);
-        IERC20(token1).approve(address(positionManager), amount1);
+function _createAndInitializePool(
+    address _token
+) internal returns (address pool) {
+    uint160 sqrtPriceX96_token0 = 50080217652889365717295;    
+    uint160 sqrtPriceX96_token1 = 125200544132223414293237760000; 
 
-        (uint256 tokenId, , , ) = positionManager.mint{value: ethAmount}(
-            INonfungiblePositionManager.MintParams({
-                token0: token0,
-                token1: token1,
-                fee: POOL_FEE,
-                tickLower: -887220,
-                tickUpper: 887220,
-                amount0Desired: amount0,
-                amount1Desired: amount1,
-                amount0Min: 0,
-                amount1Min: 0,
-                recipient: address(this),
-                deadline: block.timestamp + 300
-            })
-        );
-        
-        lpTokenIds[_token] = tokenId;
-    }
+    (address token0, address token1) = _token < WETH
+        ? (_token, WETH)
+        : (WETH, _token);
+
+    pool = IUniswapV3Factory(uniswapV3Factory).createPool(token0, token1, POOL_FEE);
+
+    uint160 initialPrice = token0 == _token ? sqrtPriceX96_token0 : sqrtPriceX96_token1;
+
+    IUniswapV3Pool(pool).initialize(initialPrice);
+    return pool;
+}
+
+/**
+ * @notice Adds liquidity to the initialized pool
+ * @dev Adds 100M tokens + 40 ETH for price match with bonding curve
+ */
+function _addLiquidityToPool(
+    address _token,
+    uint256 tokenAmount,  
+    uint256 ethAmount     
+) internal {
+    (address token0, address token1) = _token < WETH
+        ? (_token, WETH)
+        : (WETH, _token);
+    (uint256 amount0, uint256 amount1) = _token < WETH
+        ? (tokenAmount, ethAmount)
+        : (ethAmount, tokenAmount);
+
+    IWETH(WETH).deposit{value: ethAmount}();
+    IERC20(token0).approve(address(positionManager), amount0);
+    IERC20(token1).approve(address(positionManager), amount1);
+
+    (uint256 tokenId, , , ) = positionManager.mint(
+        INonfungiblePositionManager.MintParams({
+            token0: token0,
+            token1: token1,
+            fee: POOL_FEE,
+            tickLower: -887220,  
+            tickUpper: 887220,   
+            amount0Desired: amount0,
+            amount1Desired: amount1,
+            amount0Min: 0,       
+            amount1Min: 0,       
+            recipient: address(this),
+            deadline: block.timestamp + 300
+        })
+    );
+
+    lpTokenIds[_token] = tokenId;
+}
 
     function swap(
         uint256 _amount,
@@ -289,8 +310,6 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         require(_path.length >= 2, "Invalid path");
         
         IERC20(_path[0]).approve(address(swapRouter), _amount);
-        
-        address WETH = 0x4200000000000000000000000000000000000006;
         
         if (_path[0] != WETH && _path[_path.length - 1] != WETH) {
             bytes memory path = abi.encodePacked(

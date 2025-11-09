@@ -8,6 +8,5 @@ interface IMemedTokenSale {
     function tokenIdByAddress(address _token) external view returns (uint256);
     function isMintable(address _creator) external view returns (bool);
     function completeFairLaunch(uint256 _id, address _token, address _pair) external;
-    function INITIAL_SUPPLY() external view returns (uint256);
     function getFairLaunchData(uint256 _id) external view returns (FairLaunchStatus, uint256);
 }
