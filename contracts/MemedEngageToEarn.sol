@@ -14,7 +14,7 @@ import "../structs/EngageToEarnStructs.sol";
 contract MemedEngageToEarn is Ownable, ReentrancyGuard {
     constructor() Ownable(msg.sender) {}
 
-    uint256 public constant MAX_REWARD = 500_000_000 * 1e18; // 500M tokens for engagement rewards (v2.3)
+    uint256 public constant MAX_REWARD = 550_000_000 * 1e18; // 550M tokens for engagement rewards (v2.3)
     uint256 public constant CYCLE_REWARD_PERCENTAGE = 5; // 5% of engagement rewards per cycle for battles
     uint256 public constant ENGAGEMENT_REWARDS_PER_NFT_PERCENTAGE = 20; // 20% of engagement rewards per nft as per their price
     uint256 public constant ENGAGEMENT_REWARDS_CHANGE = 100 *1e18; // engagement rewards change per battle
@@ -235,7 +235,7 @@ contract MemedEngageToEarn is Ownable, ReentrancyGuard {
         uint256 totalNFTs = IMemedWarriorNFT(factory.getWarriorNFT(_token)).currentTokenId();
         if (totalNFTs == 0) return false;
         uint256 totalReward = (totalNFTs * IMemedWarriorNFT(factory.getWarriorNFT(_token)).getCurrentPrice() * ENGAGEMENT_REWARDS_PER_NFT_PERCENTAGE) / 100;
-        return totalClaimed[_token] + totalReward <= IERC20(_token).balanceOf(address(this));
+        return totalClaimed[_token] + totalReward <= MAX_REWARD;
     }
 
     function unlockCreatorIncentives(address _token) external {
