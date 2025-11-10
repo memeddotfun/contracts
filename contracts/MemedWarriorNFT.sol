@@ -111,7 +111,8 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
         require(_exists(_nftId), "NFT does not exist");
         require(ownerOf(_nftId) == msg.sender, "Not the owner");
         require(warriors[_nftId].allocated, "NFT not allocated");
-        require(memedBattle.isNftReturnable(memedToken, _nftId), "NFT not returnable");
+        (, bool isReturnable) = memedBattle.getNftRewardAndIsReturnable(memedToken, _nftId);
+        require(isReturnable, "NFT not returnable");
         warriors[_nftId].allocated = false;
         emit WarriorGetBack(_nftId, msg.sender);
     }
@@ -210,15 +211,15 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
         return from;
     }
     
-    function getWarriorMintedBeforeByUser(address _user, uint256 _timestamp) external view returns (uint256) {
+    function getWarriorMintedBeforeByUser(address _user, uint256 _timestamp) external view returns (uint256[] memory) {
         uint256[] memory nfts = userNFTs[_user];
-        uint256 count = 0;
+        uint256[] memory mintedBefore = new uint256[](nfts.length);
         for (uint256 i = 0; i < nfts.length; i++) {
             if (warriors[nfts[i]].mintedAt < _timestamp) {
-                count++;
+                mintedBefore[i] = nfts[i];
             }
         }
-        return count;
+        return mintedBefore;
     }
 
     function _exists(uint256 _tokenId) internal view returns (bool) {

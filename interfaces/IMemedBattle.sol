@@ -29,5 +29,5 @@ interface IMemedBattle {
     function getFactory() external view returns (address);
     function getResolver() external view returns (address);
     function resolveBattle(uint256 _battleId, address _actualWinner, uint256 _totalReward) external;
-    function isNftReturnable(address _token, uint256 _nftId) external view returns (bool);
+    function getNftRewardAndIsReturnable(address _token, uint256 _nftId) external view returns (uint256, bool);
 }

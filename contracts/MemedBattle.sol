@@ -186,7 +186,7 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         uint256 reward = battle.totalReward * userNfts / totalWinnerNfts;
         require(reward > 0, "No reward to claim");
         
-        IMemedEngageToEarn(factory.getMemedEngageToEarn()).claimBattleRewards(battle.winner, msg.sender, reward);
+        IERC20(battle.winner).transfer(msg.sender, reward);
         battleAllocations[_battleId][msg.sender][battle.winner].claimed = true;
         emit BattleRewardsClaimed(_battleId, msg.sender, reward);
     }
@@ -249,7 +249,7 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         
         // Transfer total rewards in a single transaction
         if (totalRewardsClaimed > 0 && rewardToken != address(0)) {
-            IMemedEngageToEarn(factory.getMemedEngageToEarn()).claimBattleRewards(rewardToken, msg.sender, totalRewardsClaimed);
+            IERC20(rewardToken).transfer(msg.sender, totalRewardsClaimed);
         }
     }
 
@@ -358,17 +358,18 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         return battle.totalReward * battleAllocations[_battleId][_user][battle.winner].nftsIds.length / (battle.winner == battle.memeA ? battle.memeANftsAllocated : battle.memeBNftsAllocated);
     }
 
-    function isNftReturnable(address _token, uint256 _nftId) external view returns (bool) {
-        uint256 nftReward = IMemedEngageToEarn(factory.getMemedEngageToEarn()).getNftReward(_token);
+    function getNftRewardAndIsReturnable(address _token, uint256 _nftId) external view returns (uint256, bool) {
+        uint256 nftReward = (IMemedWarriorNFT(factory.getWarriorNFT(_token)).getCurrentPrice()) * IMemedEngageToEarn(factory.getMemedEngageToEarn()).ENGAGEMENT_REWARDS_PER_NFT_PERCENTAGE() / 100;
         uint256 engagementRewardChange = IMemedEngageToEarn(factory.getMemedEngageToEarn()).ENGAGEMENT_REWARDS_CHANGE();
         UserNftBattleAllocation[] memory nftAllocations = nftBattleAllocations[_nftId];
+        bool isReturnable = true;
         
         for (uint256 i = 0; i < nftAllocations.length; i++) {
             Battle storage battle = battles[nftAllocations[i].battleId];
             
             // NFT still in active battle
             if(battle.status == BattleStatus.STARTED || battle.status == BattleStatus.CHALLENGED) {
-                return false;
+                isReturnable = false;
             }
             
             // Only count resolved battles
@@ -380,12 +381,12 @@ contract MemedBattle is Ownable, ReentrancyGuard {
                     if(nftReward >= engagementRewardChange) {
                         nftReward -= engagementRewardChange;
                     } else {
-                        return false; // NFT lost too much value, not returnable
+                        isReturnable = false;
                     }
                 }
             }
         }
-        return nftReward > 0;
+        return (nftReward, isReturnable != false);
     }
 
     function getUserTokenAllocations(address _user) external view returns (uint256[] memory) {
