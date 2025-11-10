@@ -23,7 +23,6 @@ contract MemedFactory is Ownable, ReentrancyGuard {
     uint256 public INITIAL_REWARDS_PER_HEAT = 100000; // 100,000 of heat will be required to unlock the battle rewards
     uint256 public BATTLE_REWARDS_PERCENTAGE = 20; // 20% of heat will be inceased or decreased based on the battle result
 
-
     // Engagement rewards
     uint256 public constant ENGAGEMENT_REWARDS_PER_NEW_HEAT = 50000; // For every 50,000 heat, 1 engagement reward is given
 
@@ -122,22 +121,29 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         address _token,
         address _creator
     ) external nonReentrant onlyOwner {
-        TokenData storage token = tokenData[memedTokenSale.tokenIdByAddress(_token)];
+        TokenData storage token = tokenData[
+            memedTokenSale.tokenIdByAddress(_token)
+        ];
         require(token.creator == _creator, "Creator mismatch");
         require(!token.isClaimedByCreator, "Already claimed by creator");
-        require(!memedTokenSale.isMintable(_creator), "Creator already has a token");
+        require(
+            !memedTokenSale.isMintable(_creator),
+            "Creator already has a token"
+        );
         token.isClaimedByCreator = true;
         // Reset lastRewardAt to current heat when creator claims
-        TokenRewardData storage rewardData = tokenRewardData[memedTokenSale.tokenIdByAddress(_token)];
+        TokenRewardData storage rewardData = tokenRewardData[
+            memedTokenSale.tokenIdByAddress(_token)
+        ];
         rewardData.lastRewardAt = rewardData.heat;
-        IMemedToken(token.token).claimUnclaimedTokens(
-            token.creator
-        );
+        memedEngageToEarn.claimUnclaimedTokens(token.token, token.creator);
     }
 
     function updateHeat(HeatUpdate[] calldata _heatUpdates) public {
         require(
-            msg.sender == address(memedBattle) || msg.sender == memedBattle.getResolver() || msg.sender == owner(),
+            msg.sender == address(memedBattle) ||
+                msg.sender == memedBattle.getResolver() ||
+                msg.sender == owner(),
             "unauthorized"
         );
 
@@ -152,12 +158,15 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         _updateHeatInternal(heatUpdatesMemory);
     }
 
-
     function _updateHeatInternal(HeatUpdate[] memory _heatUpdates) internal {
         for (uint i = 0; i < _heatUpdates.length; i++) {
-            TokenData storage token = tokenData[memedTokenSale.tokenIdByAddress(_heatUpdates[i].token)];
+            TokenData storage token = tokenData[
+                memedTokenSale.tokenIdByAddress(_heatUpdates[i].token)
+            ];
             require(token.token != address(0), "Token not created");
-            TokenRewardData storage tokenReward = tokenRewardData[memedTokenSale.tokenIdByAddress(_heatUpdates[i].token)];
+            TokenRewardData storage tokenReward = tokenRewardData[
+                memedTokenSale.tokenIdByAddress(_heatUpdates[i].token)
+            ];
             require(
                 block.timestamp >= tokenReward.lastHeatUpdate + 1 days,
                 "Heat update too frequent"
@@ -165,11 +174,14 @@ contract MemedFactory is Ownable, ReentrancyGuard {
 
             uint256 oldHeat = tokenReward.heat;
             uint256 newHeat = _heatUpdates[i].heat;
-            
+
             tokenReward.heat = newHeat;
             tokenReward.lastHeatUpdate = block.timestamp;
-            
-            if (tokenReward.lastRewardAt == INITIAL_REWARDS_PER_HEAT && oldHeat == 0) {
+
+            if (
+                tokenReward.lastRewardAt == INITIAL_REWARDS_PER_HEAT &&
+                oldHeat == 0
+            ) {
                 tokenReward.lastRewardAt = 0;
             }
 
@@ -186,10 +198,10 @@ contract MemedFactory is Ownable, ReentrancyGuard {
                 token.isClaimedByCreator &&
                 tokenReward.heat - tokenReward.creatorIncentivesUnlockedAt >=
                 tokenReward.creatorIncentivesUnlocksAt &&
-                IMemedToken(token.token).isRewardable()
+                memedEngageToEarn.isCreatorRewardable(token.token)
             ) {
                 tokenReward.creatorIncentivesUnlockedAt = tokenReward.heat;
-                IMemedToken(token.token).unlockCreatorIncentives();
+                memedEngageToEarn.unlockCreatorIncentives(token.token);
             }
 
             emit HeatUpdated(
@@ -201,9 +213,17 @@ contract MemedFactory is Ownable, ReentrancyGuard {
     }
 
     function battleUpdate(address _winner, address _loser) external {
-        require(msg.sender == address(memedBattle) || msg.sender == memedBattle.getResolver(), "unauthorized");
-        TokenRewardData storage token = tokenRewardData[memedTokenSale.tokenIdByAddress(_winner)];
-        TokenRewardData storage tokenLoser = tokenRewardData[memedTokenSale.tokenIdByAddress(_loser)];
+        require(
+            msg.sender == address(memedBattle) ||
+                msg.sender == memedBattle.getResolver(),
+            "unauthorized"
+        );
+        TokenRewardData storage token = tokenRewardData[
+            memedTokenSale.tokenIdByAddress(_winner)
+        ];
+        TokenRewardData storage tokenLoser = tokenRewardData[
+            memedTokenSale.tokenIdByAddress(_loser)
+        ];
         token.creatorIncentivesUnlocksAt =
             token.creatorIncentivesUnlocksAt -
             ((token.creatorIncentivesUnlocksAt * BATTLE_REWARDS_PERCENTAGE) /
@@ -220,29 +240,31 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         );
     }
 
-    
     function completeFairLaunch(
         uint256 _id,
         address _token,
         address _warriorNFT
     ) external onlyOwner {
         TokenData storage token = tokenData[_id];
-        (FairLaunchStatus status, uint256 ethAmount) = memedTokenSale.getFairLaunchData(_id);
-        require(status == FairLaunchStatus.READY_TO_COMPLETE, "Fair launch not ready to complete");
-        
-        IMemedToken(_token).allocateLp();
+        (FairLaunchStatus status, uint256 ethAmount) = memedTokenSale
+            .getFairLaunchData(_id);
+        require(
+            status == FairLaunchStatus.READY_TO_COMPLETE,
+            "Fair launch not ready to complete"
+        );
+
         token.token = _token;
         token.warriorNFT = _warriorNFT;
         tokens.push(_token);
         emit TokenCompletedFairLaunch(_id, _token, _warriorNFT);
-        
+
         address pool = _createAndInitializePool(_token);
-        _addLiquidityToPool(_token, IMemedToken(_token).LP_ALLOCATION(), ethAmount);
-        
+        _addLiquidityToPool(_token, ethAmount);
+
         memedTokenSale.completeFairLaunch(_id, _token, pool);
     }
 
-       function _sqrt(uint256 x) internal pure returns (uint256) {
+    function _sqrt(uint256 x) internal pure returns (uint256) {
         if (x == 0) return 0;
         uint256 z = (x + 1) / 2;
         uint256 y = x;
@@ -261,25 +283,20 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         uint256 ratioX192 = (uint256(amount1) << 192) / amount0;
         return uint160(_sqrt(ratioX192));
     }
-
     function _createAndInitializePool(
         address _token
     ) internal returns (address pool) {
+        uint256 amountToken = IMemedToken(_token).LP_ALLOCATION(); // 100M tokens
+        uint256 amountEth = 39.6 ether; // 39.6 ETH
+
         (address token0, address token1) = _token < WETH
             ? (_token, WETH)
             : (WETH, _token);
-        uint256 amountToken1;
-        uint256 amountToken0;
 
-        if (token0 == WETH) {
-            amountToken1 = 2_500_000_000 ether;
-            amountToken0 = 1 ether;
-        } else {
-            amountToken1 = 1 ether;
-            amountToken0 = 2_500_000_000 ether;
-        }
+        uint256 amount0 = token0 == _token ? amountToken : amountEth;
+        uint256 amount1 = token1 == _token ? amountToken : amountEth;
 
-        uint160 sqrtP = _encodeSqrtRatioX96(amountToken1, amountToken0);
+        uint160 sqrtP = _encodeSqrtRatioX96(amount1, amount0);
 
         pool = IUniswapV3Factory(uniswapV3Factory).createPool(
             token0,
@@ -288,46 +305,41 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         );
 
         IUniswapV3Pool(pool).initialize(sqrtP);
-        return pool;
     }
-    
-    function _addLiquidityToPool(
-    address _token,
-    uint256 tokenAmount,
-    uint256 ethAmount
-) internal {
-    (address token0, address token1) = 
-        _token < WETH 
-        ? (_token, WETH) 
-        : (WETH, _token);
+    function _addLiquidityToPool(address _token, uint256 ethAmount) internal {
+        uint256 tokenAmount = IMemedToken(_token).LP_ALLOCATION();
 
-    (uint256 amount0, uint256 amount1) = 
-        token0 == _token 
-        ? (tokenAmount, ethAmount) 
-        : (ethAmount, tokenAmount);
+        (address token0, address token1) = _token < WETH
+            ? (_token, WETH)
+            : (WETH, _token);
 
-    IERC20(token0).approve(address(positionManager), amount0);
-    IERC20(token1).approve(address(positionManager), amount1);
-    IWETH(WETH).deposit{value: ethAmount}();
+        uint256 amount0 = token0 == _token ? tokenAmount : ethAmount;
+        uint256 amount1 = token1 == _token ? tokenAmount : ethAmount;
 
-    (uint256 tokenId,,,) = positionManager.mint(
-        INonfungiblePositionManager.MintParams({
-            token0: token0,
-            token1: token1,
-            fee: POOL_FEE,
-            tickLower: -887220,
-            tickUpper: 887220,
-            amount0Desired: amount0,
-            amount1Desired: amount1,
-            amount0Min: 0,
-            amount1Min: 0,
-            recipient: address(this),
-            deadline: block.timestamp + 300
-        })
-    );
+        // wrap ETH
+        IWETH(WETH).deposit{value: ethAmount}();
 
-    lpTokenIds[_token] = tokenId;
-}
+        IERC20(token0).approve(address(positionManager), amount0);
+        IERC20(token1).approve(address(positionManager), amount1);
+
+        (uint256 tokenId, , , ) = positionManager.mint(
+            INonfungiblePositionManager.MintParams({
+                token0: token0,
+                token1: token1,
+                fee: POOL_FEE,
+                tickLower: -887220,
+                tickUpper: 887220,
+                amount0Desired: amount0,
+                amount1Desired: amount1,
+                amount0Min: 0,
+                amount1Min: 0,
+                recipient: address(this),
+                deadline: block.timestamp + 300
+            })
+        );
+
+        lpTokenIds[_token] = tokenId;
+    }
 
     function swap(
         uint256 _amount,
@@ -356,24 +368,25 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         require(p1 != address(0) && p2 != address(0), "missing pool");
 
         IERC20(tokenIn).approve(address(swapRouter), _amount);
-        
-            bytes memory path = abi.encodePacked(
-                tokenIn,           
-                POOL_FEE,               
-                WETH,               
-                POOL_FEE,           
-                tokenOut  
-            );
-            
-            ISwapRouter.ExactInputParams memory params = ISwapRouter.ExactInputParams({
+
+        bytes memory path = abi.encodePacked(
+            tokenIn,
+            POOL_FEE,
+            WETH,
+            POOL_FEE,
+            tokenOut
+        );
+
+        ISwapRouter.ExactInputParams memory params = ISwapRouter
+            .ExactInputParams({
                 path: path,
                 recipient: _to,
                 amountIn: _amount,
                 amountOutMinimum: 0
             });
-            
-            uint256 amountOut = swapRouter.exactInput(params);
-            return amountOut;
+
+        uint256 amountOut = swapRouter.exactInput(params);
+        return amountOut;
     }
 
     /**
@@ -382,10 +395,12 @@ contract MemedFactory is Ownable, ReentrancyGuard {
      * @return amount0 Amount of token0 fees collected
      * @return amount1 Amount of token1 fees collected
      */
-    function collectFees(address _token) external onlyOwner returns (uint256 amount0, uint256 amount1) {
+    function collectFees(
+        address _token
+    ) external onlyOwner returns (uint256 amount0, uint256 amount1) {
         uint256 tokenId = lpTokenIds[_token];
         require(tokenId != 0, "No LP position for this token");
-        
+
         (amount0, amount1) = positionManager.collect(
             INonfungiblePositionManager.CollectParams({
                 tokenId: tokenId,
@@ -408,18 +423,23 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         return tokenData[_id].creator;
     }
 
-
     function getHeat(address _token) external view returns (uint256) {
         return tokenRewardData[memedTokenSale.tokenIdByAddress(_token)].heat;
     }
 
-    function getTokenByAddress(address _token) public view returns (TokenData memory) {
-        TokenData memory token = tokenData[memedTokenSale.tokenIdByAddress(_token)];
+    function getTokenByAddress(
+        address _token
+    ) public view returns (TokenData memory) {
+        TokenData memory token = tokenData[
+            memedTokenSale.tokenIdByAddress(_token)
+        ];
         require(token.token != address(0), "Token not created");
         return token;
     }
 
-    function getTokenById(uint256 _id) external view returns (TokenData memory) {
+    function getTokenById(
+        uint256 _id
+    ) external view returns (TokenData memory) {
         return tokenData[_id];
     }
 

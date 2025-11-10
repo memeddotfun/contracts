@@ -18,15 +18,20 @@ contract MemedEngageToEarn is Ownable, ReentrancyGuard {
     uint256 public constant CYCLE_REWARD_PERCENTAGE = 5; // 5% of engagement rewards per cycle for battles
     uint256 public constant ENGAGEMENT_REWARDS_PER_NFT_PERCENTAGE = 20; // 20% of engagement rewards per nft as per their price
     uint256 public constant ENGAGEMENT_REWARDS_CHANGE = 100 *1e18; // engagement rewards change per battle
+    uint256 public constant CREATOR_INCENTIVES_ALLOCATION = 200000000 * 1e18; // 200M (20%)
+    uint256 public constant CREATOR_INITIAL_ALLOCATION_PER_UNLOCK = 2000000 * 1e18; // 2M tokens
     IMemedFactory public factory;
     uint256 public engagementRewardId;
 
     mapping(uint256 => EngagementReward) public engagementRewards;
     mapping(address => uint256) public totalClaimed;
     mapping(uint256 => mapping(address => bool)) public isClaimedByUser;
-
+    mapping(address => CreatorData) public creatorData;
     event EngagementRewardRegistered(uint256 indexed rewardId, address indexed token, uint256 nftPrice, uint256 timestamp);
     event EngagementRewardClaimed(address indexed user, uint256 indexed rewardId, uint256 amount);
+    event CreatorIncentivesUnlocked(uint256 amount);
+    event CreatorIncentivesClaimed(uint256 amount);
+    event CreatorSet(address to);
 
     function getEngagementReward(uint256 _rewardId) external view returns (EngagementReward memory) {
         return engagementRewards[_rewardId];
@@ -231,5 +236,35 @@ contract MemedEngageToEarn is Ownable, ReentrancyGuard {
         if (totalNFTs == 0) return false;
         uint256 totalReward = (totalNFTs * IMemedWarriorNFT(factory.getWarriorNFT(_token)).getCurrentPrice() * ENGAGEMENT_REWARDS_PER_NFT_PERCENTAGE) / 100;
         return totalClaimed[_token] + totalReward <= IERC20(_token).balanceOf(address(this));
+    }
+
+    function unlockCreatorIncentives(address _token) external {
+        require(msg.sender == address(factory), "Only factory can unlock creator incentives");
+        uint256 amount = CREATOR_INITIAL_ALLOCATION_PER_UNLOCK;
+        require(creatorData[_token].balance >= amount, "Not enough balance to unlock");
+        creatorData[_token].unlockedBalance += amount;
+        creatorData[_token].balance -= amount;
+        emit CreatorIncentivesUnlocked(amount);
+    }
+
+    function claimCreatorIncentives(address _token) external {
+        require(msg.sender == creatorData[_token].creator, "Only creator can claim");
+        uint256 amount = creatorData[_token].unlockedBalance;
+        creatorData[_token].unlockedBalance = 0;
+
+        IERC20(_token).transfer(creatorData[_token].creator, amount);
+        emit CreatorIncentivesClaimed(amount);
+    }
+
+    function isCreatorRewardable(address _token) external view returns (bool) {
+        return creatorData[_token].balance > CREATOR_INITIAL_ALLOCATION_PER_UNLOCK;
+    }
+
+    function claimUnclaimedTokens(address _token, address to) external {
+        require(to != address(0), "Invalid address");
+        require(creatorData[_token].creator == address(0), "Creator already set");
+        creatorData[_token].creator = to;
+        creatorData[_token].balance = CREATOR_INCENTIVES_ALLOCATION;
+        emit CreatorSet(to);
     }
 }

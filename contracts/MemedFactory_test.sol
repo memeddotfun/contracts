@@ -135,7 +135,7 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
             memedTokenSale.tokenIdByAddress(_token)
         ];
         rewardData.lastRewardAt = rewardData.heat;
-        IMemedToken(token.token).claimUnclaimedTokens(token.creator);
+        memedEngageToEarn.claimUnclaimedTokens(token.token, token.creator);
     }
 
     function updateHeat(HeatUpdate[] calldata _heatUpdates) public {
@@ -202,10 +202,10 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
                 token.isClaimedByCreator &&
                 tokenReward.heat - tokenReward.creatorIncentivesUnlockedAt >=
                 tokenReward.creatorIncentivesUnlocksAt &&
-                IMemedToken(token.token).isRewardable()
+                memedEngageToEarn.isCreatorRewardable(token.token)
             ) {
                 tokenReward.creatorIncentivesUnlockedAt = tokenReward.heat;
-                IMemedToken(token.token).unlockCreatorIncentives();
+                memedEngageToEarn.unlockCreatorIncentives(token.token);
             }
 
             emit HeatUpdated(
@@ -257,7 +257,6 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
             "Fair launch not ready to complete"
         );
 
-        IMemedToken(_token).allocateLp();
         token.token = _token;
         token.warriorNFT = _warriorNFT;
         tokens.push(_token);
@@ -299,18 +298,23 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
         (address token0, address token1) = _token < MEMED_TEST_ETH
             ? (_token, MEMED_TEST_ETH)
             : (MEMED_TEST_ETH, _token);
-        uint256 amountToken1;
-        uint256 amountToken0;
 
-        if (token0 == MEMED_TEST_ETH) {
-            amountToken1 = 2_500_000_000 ether;
-            amountToken0 = 1 ether;
+        // 100M tokens & 39.6 ETH
+        uint256 amountToken = 100_000_000 ether;
+        uint256 amountEth = 39.6 ether;
+
+        uint256 amount0;
+        uint256 amount1;
+
+        if (token0 == _token) {
+            amount0 = amountToken;
+            amount1 = amountEth;
         } else {
-            amountToken1 = 1 ether;
-            amountToken0 = 2_500_000_000 ether;
+            amount0 = amountEth;
+            amount1 = amountToken;
         }
 
-        uint160 sqrtP = _encodeSqrtRatioX96(amountToken1, amountToken0);
+        uint160 sqrtP = _encodeSqrtRatioX96(amount1, amount0);
 
         pool = IUniswapV3Factory(uniswapV3Factory).createPool(
             token0,
@@ -319,7 +323,6 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
         );
 
         IUniswapV3Pool(pool).initialize(sqrtP);
-        return pool;
     }
 
     function _addLiquidityToPool(
@@ -331,9 +334,16 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
             ? (_token, MEMED_TEST_ETH)
             : (MEMED_TEST_ETH, _token);
 
-        (uint256 amount0, uint256 amount1) = token0 == _token
-            ? (tokenAmount, ethAmount)
-            : (ethAmount, tokenAmount);
+        uint256 amount0;
+        uint256 amount1;
+
+        if (token0 == _token) {
+            amount0 = tokenAmount; // 100M tokens
+            amount1 = ethAmount; // 39.6 ETH
+        } else {
+            amount0 = ethAmount;
+            amount1 = tokenAmount;
+        }
 
         IERC20(token0).approve(address(positionManager), amount0);
         IERC20(token1).approve(address(positionManager), amount1);

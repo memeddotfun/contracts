@@ -14,3 +14,9 @@ struct EngagementRewardClaim {
     uint256 amountToClaim;
     address token;
 }
+
+struct CreatorData {
+    address creator;
+    uint256 balance;
+    uint256 unlockedBalance;
+}
