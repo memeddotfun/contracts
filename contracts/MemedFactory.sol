@@ -262,6 +262,9 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         _addLiquidityToPool(_token, ethAmount);
 
         memedTokenSale.completeFairLaunch(_id, _token, pool);
+        if (token.isClaimedByCreator) {
+            memedEngageToEarn.claimUnclaimedTokens(_token, token.creator);
+        }
     }
 
     function _sqrt(uint256 x) internal pure returns (uint256) {

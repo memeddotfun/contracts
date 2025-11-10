@@ -270,6 +270,9 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
         );
 
         memedTokenSale.completeFairLaunch(_id, _token, pool);
+        if (token.isClaimedByCreator) {
+            memedEngageToEarn.claimUnclaimedTokens(_token, token.creator);
+        }
     }
 
     function _sqrt(uint256 x) internal pure returns (uint256) {
