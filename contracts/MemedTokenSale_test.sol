@@ -13,9 +13,8 @@ contract MemedTokenSale_test is Ownable, ReentrancyGuard {
     uint256 public constant DECIMALS = 1e18;
     uint256 public constant TOTAL_FOR_SALE = 150_000_000 * DECIMALS;
     uint256 public constant RAISE_ETH = 40 ether;
+    uint256 public constant LP_ETH = 39.6 ether;
     uint256 public constant PRICE_PER_TOKEN_WEI = 266_666_666_666;
-    uint256 public constant PLATFORM_FEE_NUM = 10;
-    uint256 public constant PLATFORM_FEE_DEN = 1000;
 
     IMemedFactory public memedFactory;
     uint256 public id;
@@ -113,8 +112,9 @@ contract MemedTokenSale_test is Ownable, ReentrancyGuard {
 
         emit CommitmentMade(_id, msg.sender, useAmount, tokensOut);
 
-        if (f.totalCommitted == RAISE_ETH || f.totalSold == TOTAL_FOR_SALE)
+        if (f.totalSold == TOTAL_FOR_SALE){
             _completeFairLaunch(_id);
+        }
     }
 
     function cancelCommit(uint256 _id) external nonReentrant {
@@ -136,11 +136,11 @@ contract MemedTokenSale_test is Ownable, ReentrancyGuard {
     function _completeFairLaunch(uint256 _id) internal {
         FairLaunchData storage f = fairLaunchData[_id];
         require(f.status == FairLaunchStatus.ACTIVE, "state");
-        require(f.totalCommitted == RAISE_ETH, "!=40");
-        uint256 fee = (RAISE_ETH * PLATFORM_FEE_NUM) / PLATFORM_FEE_DEN; // 0.4 ETH
-        IERC20(MEMED_TEST_ETH).transfer(owner(), fee);
-        IERC20(MEMED_TEST_ETH).transfer(address(memedFactory), RAISE_ETH - fee);
+        require(f.totalSold == TOTAL_FOR_SALE, "!=150M");
         f.status = FairLaunchStatus.READY_TO_COMPLETE;
+        uint256 fee = f.totalCommitted - LP_ETH;
+        IERC20(MEMED_TEST_ETH).transfer(owner(), fee);
+        IERC20(MEMED_TEST_ETH).transfer(address(memedFactory), LP_ETH);
         emit FairLaunchReadyToComplete(_id);
     }
 
@@ -189,11 +189,11 @@ contract MemedTokenSale_test is Ownable, ReentrancyGuard {
         );
     }
 
-    function getFairLaunchData(
+    function getFairLaunchStatus(
         uint256 _id
-    ) public view returns (FairLaunchStatus, uint256) {
+    ) public view returns (FairLaunchStatus) {
         FairLaunchData storage f = fairLaunchData[_id];
-        return (f.status, f.totalCommitted);
+        return f.status;
     }
     function getUserCommitment(
         uint256 _id,

@@ -246,8 +246,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         address _warriorNFT
     ) external onlyOwner {
         TokenData storage token = tokenData[_id];
-        (FairLaunchStatus status, uint256 ethAmount) = memedTokenSale
-            .getFairLaunchData(_id);
+        FairLaunchStatus status = memedTokenSale.getFairLaunchStatus(_id);
         require(
             status == FairLaunchStatus.READY_TO_COMPLETE,
             "Fair launch not ready to complete"
@@ -259,7 +258,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         emit TokenCompletedFairLaunch(_id, _token, _warriorNFT);
 
         address pool = _createAndInitializePool(_token);
-        _addLiquidityToPool(_token, ethAmount);
+        _addLiquidityToPool(_token, memedTokenSale.LP_ETH());
 
         memedTokenSale.completeFairLaunch(_id, _token, pool);
         if (token.isClaimedByCreator) {
@@ -290,7 +289,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         address _token
     ) internal returns (address pool) {
         uint256 amountToken = IMemedToken(_token).LP_ALLOCATION(); // 100M tokens
-        uint256 amountEth = 39.6 ether; // 39.6 ETH
+        uint256 amountEth = memedTokenSale.LP_ETH(); // 39.6 ETH
 
         (address token0, address token1) = _token < WETH
             ? (_token, WETH)
