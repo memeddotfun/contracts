@@ -14,6 +14,7 @@ async function main() {
   const uniswapV3PositionManager = "0x27F971cb582BF9E50F397e4d29a5C7A34f11faA2";
   const uniswapV3SwapRouter = "0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4";
   const { battle } = await ignition.deploy(battleModule);
+  console.log("MemedBattle deployed to:", battle.address);
   const { battleResolver } = await ignition.deploy(battleResolverModule, {
     parameters: {
       BattleResolverModule: {
@@ -21,7 +22,7 @@ async function main() {
       },
     },
   });
-  console.log("MemedBattle deployed to:", battle.address);
+  console.log("MemedBattleResolver deployed to:", battleResolver.address);
   const { engageToEarn } = await ignition.deploy(engageToEarnModule);
   console.log("MemedEngageToEarn deployed to:", engageToEarn.address);
   const { tokenSale } = await ignition.deploy(tokenSaleModule);
