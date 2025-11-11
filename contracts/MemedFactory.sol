@@ -11,6 +11,8 @@ import "../interfaces/IMemedTokenSale.sol";
 import "../interfaces/IMemedEngageToEarn.sol";
 import "../structs/FactoryStructs.sol";
 import "../interfaces/IWETH.sol";
+import "../libraries/TickMath.sol";
+import "../libraries/FullMath.sol";
 
 contract MemedFactory is Ownable, ReentrancyGuard {
     uint256 public constant REWARD_PER_ENGAGEMENT = 100000;
@@ -258,89 +260,114 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         emit TokenCompletedFairLaunch(_id, _token, _warriorNFT);
 
         address pool = _createAndInitializePool(_token);
-        _addLiquidityToPool(_token, memedTokenSale.LP_ETH());
-
+        uint256 lpTokenId = _addLiquidityToPool(_token, IMemedToken(_token).LP_ALLOCATION(), memedTokenSale.LP_ETH());
+        lpTokenIds[_token] = lpTokenId;
         memedTokenSale.completeFairLaunch(_id, _token, pool);
         if (token.isClaimedByCreator) {
             memedEngageToEarn.claimUnclaimedTokens(_token, token.creator);
         }
     }
 
-    function _sqrt(uint256 x) internal pure returns (uint256) {
+     function _sqrtRatio(uint256 x) internal pure returns (uint256 r) {
         if (x == 0) return 0;
-        uint256 z = (x + 1) / 2;
-        uint256 y = x;
-        while (z < y) {
-            y = z;
-            z = (x / z + z) / 2;
+        uint256 z = (x + 1) >> 1;
+        r = x;
+        while (z < r) {
+            r = z;
+            z = (x / z + z) >> 1;
         }
-        return y;
     }
 
-    function _encodeSqrtRatioX96(
-        uint256 amount1,
-        uint256 amount0
-    ) internal pure returns (uint160) {
+    function encodeSqrtRatioX96(uint256 amount1, uint256 amount0) internal pure returns (uint160) {
         require(amount0 > 0 && amount1 > 0, "bad ratio");
-        uint256 ratioX192 = (uint256(amount1) << 192) / amount0;
-        return uint160(_sqrt(ratioX192));
+        uint256 ratioX192 = FullMath.mulDiv(amount1, uint256(1) << 192, amount0);
+        uint256 sqrtX96 = _sqrtRatio(ratioX192);
+        require(sqrtX96 <= type(uint160).max, "sqrt overflow");
+        return uint160(sqrtX96);
     }
-    function _createAndInitializePool(
-        address _token
-    ) internal returns (address pool) {
-        uint256 amountToken = IMemedToken(_token).LP_ALLOCATION(); // 100M tokens
-        uint256 amountEth = memedTokenSale.LP_ETH(); // 39.6 ETH
 
+    function _roundToSpacing(int24 tick, int24 spacing, bool down) internal pure returns (int24) {
+        int24 rem = tick % spacing;
+        if (rem == 0) return tick;
+        return down
+            ? tick - rem - (tick < 0 ? spacing : int24(0))
+            : tick - rem + (tick > 0 ? spacing : int24(0));
+    }
+
+    function _createAndInitializePool(address _token) internal returns (address pool) {
         (address token0, address token1) = _token < WETH
             ? (_token, WETH)
             : (WETH, _token);
+
+        uint256 amountToken = IMemedToken(_token).LP_ALLOCATION();
+        uint256 amountEth = memedTokenSale.LP_ETH();
+        require(amountToken > 0 && amountEth > 0, "zero amounts");
 
         uint256 amount0 = token0 == _token ? amountToken : amountEth;
-        uint256 amount1 = token1 == _token ? amountToken : amountEth;
+        uint256 amount1 = token0 == _token ? amountEth   : amountToken;
 
-        uint160 sqrtP = _encodeSqrtRatioX96(amount1, amount0);
+        address existing = uniswapV3Factory.getPool(token0, token1, POOL_FEE);
+        if (existing != address(0)) revert("POOL_EXISTS");
 
-        pool = IUniswapV3Factory(uniswapV3Factory).createPool(
-            token0,
-            token1,
-            POOL_FEE
-        );
+        uint160 sqrtPriceX96 = encodeSqrtRatioX96(amount1, amount0);
 
-        IUniswapV3Pool(pool).initialize(sqrtP);
+        pool = IUniswapV3Factory(uniswapV3Factory).createPool(token0, token1, POOL_FEE);
+
+        IUniswapV3Pool(pool).initialize(sqrtPriceX96);
     }
-    function _addLiquidityToPool(address _token, uint256 ethAmount) internal {
-        uint256 tokenAmount = IMemedToken(_token).LP_ALLOCATION();
 
+    function _addLiquidityToPool(
+        address _token,
+        uint256 tokenAmount,
+        uint256 ethAmount
+    ) internal returns (uint256) {
         (address token0, address token1) = _token < WETH
             ? (_token, WETH)
             : (WETH, _token);
 
-        uint256 amount0 = token0 == _token ? tokenAmount : ethAmount;
-        uint256 amount1 = token1 == _token ? tokenAmount : ethAmount;
+        uint256 amount0Desired = token0 == _token ? tokenAmount : ethAmount;
+        uint256 amount1Desired = token0 == _token ? ethAmount   : tokenAmount;
 
-        // wrap ETH
-        IWETH(WETH).deposit{value: ethAmount}();
+        if (IERC20(_token).balanceOf(address(this)) < tokenAmount) revert("MISSING_BALANCE_TOKEN");
+        if (address(this).balance < ethAmount) revert("MISSING_BALANCE_ETH");
 
-        IERC20(token0).approve(address(positionManager), amount0);
-        IERC20(token1).approve(address(positionManager), amount1);
-
-        (uint256 tokenId, , , ) = positionManager.mint(
-            INonfungiblePositionManager.MintParams({
-                token0: token0,
-                token1: token1,
-                fee: POOL_FEE,
-                tickLower: -887220,
-                tickUpper: 887220,
-                amount0Desired: amount0,
-                amount1Desired: amount1,
-                amount0Min: 0,
-                amount1Min: 0,
-                recipient: address(this),
-                deadline: block.timestamp + 300
-            })
+        uint160 sqrtPriceX96 = encodeSqrtRatioX96(
+            token0 == _token ? ethAmount   : tokenAmount,
+            token0 == _token ? tokenAmount : ethAmount
         );
 
-        lpTokenIds[_token] = tokenId;
+        int24 initialTick = TickMath.getTickAtSqrtRatio(sqrtPriceX96);
+
+        int24 spacing = 60;
+        int24 rawLower = initialTick - 10_000;
+        int24 rawUpper = initialTick + 10_000;
+
+        int24 tickLower = _roundToSpacing(rawLower, spacing, true);
+        int24 tickUpper = _roundToSpacing(rawUpper, spacing, false);
+
+        if (tickLower < TickMath.MIN_TICK) tickLower = TickMath.MIN_TICK - (TickMath.MIN_TICK % spacing);
+        if (tickUpper > TickMath.MAX_TICK) tickUpper = TickMath.MAX_TICK - (TickMath.MAX_TICK % spacing);
+
+        IERC20(token0).approve(address(positionManager), amount0Desired);
+        IERC20(token1).approve(address(positionManager), amount1Desired);
+        IWETH(WETH).deposit{value: ethAmount}();
+
+          (uint256 lpTokenId, , , ) = positionManager.mint(
+                INonfungiblePositionManager.MintParams({
+                    token0: token0,
+                    token1: token1,
+                    fee: POOL_FEE,
+                    tickLower: tickLower,
+                    tickUpper: tickUpper,
+                    amount0Desired: amount0Desired,
+                    amount1Desired: amount1Desired,
+                    amount0Min: 0,
+                    amount1Min: 0,
+                    recipient: address(this),
+                    deadline: block.timestamp + 600
+                })
+            );
+        return lpTokenId;
     }
 
     function swap(

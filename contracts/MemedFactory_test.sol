@@ -238,12 +238,12 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
         emit TokenCompletedFairLaunch(_id, _token, _warriorNFT);
 
         address pool = _createAndInitializePool(_token);
-        _addLiquidityToPool(
+        uint256 tokenId = _addLiquidityToPool(
             _token,
             IMemedToken(_token).LP_ALLOCATION(),
             memedTokenSale.LP_ETH()
         );
-
+        lpTokenIds[_token] = tokenId;
         memedTokenSale.completeFairLaunch(_id, _token, pool);
         if (t.isClaimedByCreator) {
             memedEngageToEarn.claimUnclaimedTokens(_token, t.creator);
@@ -252,48 +252,49 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
 
     function _sqrtRatio(uint256 x) internal pure returns (uint256 r) {
         if (x == 0) return 0;
-        uint256 z = (x + 1) / 2;
+        uint256 z = (x + 1) >> 1;
         r = x;
         while (z < r) {
             r = z;
-            z = (x / z + z) / 2;
+            z = (x / z + z) >> 1;
         }
     }
 
-    function encodeSqrtRatioX96(
-        uint256 amount1,
-        uint256 amount0
-    ) internal pure returns (uint160) {
-        require(amount0 > 0 && amount1 > 0, "BAD_RATIO");
-
-        uint256 ratioX192 = (amount1 << 192) / amount0;
-
-        uint256 z = (ratioX192 + 1) / 2;
-        uint256 y = ratioX192;
-        while (z < y) {
-            y = z;
-            z = (ratioX192 / z + z) / 2;
-        }
-
-        require(y <= type(uint160).max, "SQRT_OVERFLOW");
-        return uint160(y);
+    function encodeSqrtRatioX96(uint256 amount1, uint256 amount0) internal pure returns (uint160) {
+        require(amount0 > 0 && amount1 > 0, "bad ratio");
+        uint256 ratioX192 = FullMath.mulDiv(amount1, uint256(1) << 192, amount0);
+        uint256 sqrtX96 = _sqrtRatio(ratioX192);
+        require(sqrtX96 <= type(uint160).max, "sqrt overflow");
+        return uint160(sqrtX96);
     }
 
-    function _createAndInitializePool(
-        address _token
-    ) internal returns (address pool) {
-        address token0 = _token < MEMED_TEST_ETH ? _token : MEMED_TEST_ETH;
-        address token1 = _token < MEMED_TEST_ETH ? MEMED_TEST_ETH : _token;
+    function _roundToSpacing(int24 tick, int24 spacing, bool down) internal pure returns (int24) {
+        int24 rem = tick % spacing;
+        if (rem == 0) return tick;
+        return down
+            ? tick - rem - (tick < 0 ? spacing : int24(0))
+            : tick - rem + (tick > 0 ? spacing : int24(0));
+    }
 
-        uint256 amountToken = IMemedToken(_token).LP_ALLOCATION(); // e.g. 100M * 1e18
-        uint256 amountEth = memedTokenSale.LP_ETH(); // e.g. 39.6 * 1e18
+    function _createAndInitializePool(address _token) internal returns (address pool) {
+        (address token0, address token1) = _token < MEMED_TEST_ETH
+            ? (_token, MEMED_TEST_ETH)
+            : (MEMED_TEST_ETH, _token);
+
+        uint256 amountToken = IMemedToken(_token).LP_ALLOCATION();
+        uint256 amountEth = memedTokenSale.LP_ETH();
+        require(amountToken > 0 && amountEth > 0, "zero amounts");
 
         uint256 amount0 = token0 == _token ? amountToken : amountEth;
-        uint256 amount1 = token0 == _token ? amountEth : amountToken;
+        uint256 amount1 = token0 == _token ? amountEth   : amountToken;
+
+        address existing = uniswapV3Factory.getPool(token0, token1, POOL_FEE);
+        if (existing != address(0)) revert("POOL_EXISTS");
 
         uint160 sqrtPriceX96 = encodeSqrtRatioX96(amount1, amount0);
 
-        pool = uniswapV3Factory.createPool(token0, token1, POOL_FEE);
+        pool = IUniswapV3Factory(uniswapV3Factory).createPool(token0, token1, POOL_FEE);
+
         IUniswapV3Pool(pool).initialize(sqrtPriceX96);
     }
 
@@ -301,62 +302,53 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
         address _token,
         uint256 tokenAmount,
         uint256 ethAmount
-    ) internal {
-        address token0 = _token < MEMED_TEST_ETH ? _token : MEMED_TEST_ETH;
-        address token1 = _token < MEMED_TEST_ETH ? MEMED_TEST_ETH : _token;
+    ) internal returns (uint256 tokenId) {
+        (address token0, address token1) = _token < MEMED_TEST_ETH
+            ? (_token, MEMED_TEST_ETH)
+            : (MEMED_TEST_ETH, _token);
 
-        uint256 amount0 = token0 == _token ? tokenAmount : ethAmount;
-        uint256 amount1 = token0 == _token ? ethAmount : tokenAmount;
+        uint256 amount0Desired = token0 == _token ? tokenAmount : ethAmount;
+        uint256 amount1Desired = token0 == _token ? ethAmount   : tokenAmount;
 
-        // ✅ BALANCE CHECKS (PREVENT 15 TOKENS ISSUE)
-        require(
-            IERC20(token0).balanceOf(address(this)) >= amount0,
-            "MISSING_TOKEN0"
-        );
-        require(
-            IERC20(token1).balanceOf(address(this)) >= amount1,
-            "MISSING_TOKEN1"
-        );
+        if (IERC20(token0).balanceOf(address(this)) < amount0Desired) revert("MISSING_BALANCE_TOKEN0");
+        if (IERC20(token1).balanceOf(address(this)) < amount1Desired) revert("MISSING_BALANCE_TOKEN1");
 
-        // ✅ APPROVE POSITION MANAGER
-        IERC20(token0).approve(address(positionManager), 0);
-        IERC20(token0).approve(address(positionManager), amount0);
-
-        IERC20(token1).approve(address(positionManager), 0);
-        IERC20(token1).approve(address(positionManager), amount1);
-
-        // ✅ SET TICK RANGE CORRECTLY
         uint160 sqrtPriceX96 = encodeSqrtRatioX96(
-            token0 == _token ? ethAmount : tokenAmount,
+            token0 == _token ? ethAmount   : tokenAmount,
             token0 == _token ? tokenAmount : ethAmount
         );
 
         int24 initialTick = TickMath.getTickAtSqrtRatio(sqrtPriceX96);
-        int24 tickLower = initialTick - 20000;
-        int24 tickUpper = initialTick + 20000;
 
-        // ✅ CLAMP TICKS
-        if (tickLower < TickMath.MIN_TICK) tickLower = TickMath.MIN_TICK;
-        if (tickUpper > TickMath.MAX_TICK) tickUpper = TickMath.MAX_TICK;
+        int24 spacing = 60;
+        int24 rawLower = initialTick - 10_000;
+        int24 rawUpper = initialTick + 10_000;
 
-        // ✅ MINT LP
-        (uint256 tokenId, , , ) = positionManager.mint(
-            INonfungiblePositionManager.MintParams({
-                token0: token0,
-                token1: token1,
-                fee: POOL_FEE,
-                tickLower: tickLower,
-                tickUpper: tickUpper,
-                amount0Desired: amount0,
-                amount1Desired: amount1,
-                amount0Min: 0,
-                amount1Min: 0,
-                recipient: address(this),
-                deadline: block.timestamp + 300
-            })
-        );
+        int24 tickLower = _roundToSpacing(rawLower, spacing, true);
+        int24 tickUpper = _roundToSpacing(rawUpper, spacing, false);
 
-        lpTokenIds[_token] = tokenId;
+        if (tickLower < TickMath.MIN_TICK) tickLower = TickMath.MIN_TICK - (TickMath.MIN_TICK % spacing);
+        if (tickUpper > TickMath.MAX_TICK) tickUpper = TickMath.MAX_TICK - (TickMath.MAX_TICK % spacing);
+
+        IERC20(token0).approve(address(positionManager), amount0Desired);
+        IERC20(token1).approve(address(positionManager), amount1Desired);
+
+          (uint256 lpTokenId, , , ) = positionManager.mint(
+                INonfungiblePositionManager.MintParams({
+                    token0: token0,
+                    token1: token1,
+                    fee: POOL_FEE,
+                    tickLower: tickLower,
+                    tickUpper: tickUpper,
+                    amount0Desired: amount0Desired,
+                    amount1Desired: amount1Desired,
+                    amount0Min: 0,
+                    amount1Min: 0,
+                    recipient: address(this),
+                    deadline: block.timestamp + 600
+                })
+            );
+        return lpTokenId;
     }
 
     function swap(
@@ -364,6 +356,10 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
         address[] calldata _path,
         address _to
     ) external nonReentrant returns (uint256) {
+        require(
+            msg.sender == address(memedEngageToEarn),
+            "Only engage to earn can swap"
+        );
         require(_path.length >= 2, "path");
         address tokenIn = _path[0];
         address tokenOut = _path[_path.length - 1];
