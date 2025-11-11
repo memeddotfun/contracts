@@ -26,5 +26,6 @@
     "hardhat": "^3.0.11",
     "typescript": "~5.8.0",
     "viem": "^2.37.8"
-  }
+  },
+  "dependencies": {}
 }

@@ -9,7 +9,9 @@ const { ALCHEMY_API_KEY, WALLET_KEY, ETHERSCAN_API_KEY } = process.env;
 const config: HardhatUserConfig = {
   plugins: [hardhatToolboxViemPlugin, hardhatVerifyPlugin],
   solidity: {
-    version: "0.8.28",
+    compilers: [
+      {
+        version: "0.8.28",
     settings: {
       optimizer: {
         enabled: true,
@@ -17,8 +19,29 @@ const config: HardhatUserConfig = {
       },
       evmVersion: "cancun",
       viaIR: false,
+      },
     },
-    },
+      {
+        version: "0.7.6",
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 200,
+          },
+          evmVersion: "istanbul",
+        },
+      },
+      {
+        version: "0.8.19",
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 200,
+          },
+        },
+      },
+    ],
+  },
     chainDescriptors: {
         84532: {
           name: "Base Sepolia",
