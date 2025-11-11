@@ -121,18 +121,6 @@ contract MemedEngageToEarn is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @dev Batch claim multiple engagement rewards
-     */
-    function batchClaimEngagementRewards() external nonReentrant {
-        EngagementRewardClaim[] memory engagementRewardsClaims = getUserEngagementReward();
-        for (uint256 i = 0; i < engagementRewardsClaims.length; i++) {
-            if (engagementRewardsClaims[i].amountToClaim > 0) {
-                claimEngagementReward(engagementRewardsClaims[i].rewardId);
-            }
-        }
-    }
-    
-    /**
      * @dev Swap loser tokens to winner tokens for battle rewards
      * Routes through WETH: loser -> WETH -> winner
      * @param _loser Loser token address (token to swap from)

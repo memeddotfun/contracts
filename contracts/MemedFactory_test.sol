@@ -161,7 +161,7 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
                 memedTokenSale.tokenIdByAddress(_heatUpdates[i].token)
             ];
             require(
-                block.timestamp >= r.lastHeatUpdate + 1 days,
+                block.timestamp >= r.lastHeatUpdate + 1 days || msg.sender == memedBattle.getResolver(),
                 "heat too frequent"
             );
 
