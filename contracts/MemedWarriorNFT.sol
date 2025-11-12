@@ -5,6 +5,7 @@ import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "../interfaces/IMemedFactory.sol";
 import "../interfaces/IMemedBattle.sol";
 import "../interfaces/IMemedEngageToEarn.sol";
@@ -12,7 +13,7 @@ import "../interfaces/IMemedToken.sol";
 import "../structs/WarriorStructs.sol";
 
 
-contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
+contract MemedWarriorNFT is ERC721URIStorage, Ownable, ReentrancyGuard {
     // Base price and dynamic pricing constants from Memed.md specification
     uint256 public constant BASE_PRICE = 5000 * 1e18; // 5,000 MEME base price
     uint256 public constant PRICE_INCREMENT = 100 * 1e18; // +100 MEME per 10,000 Heat Score
@@ -21,6 +22,7 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
     IMemedFactory public immutable factory;
     IMemedBattle public immutable memedBattle;
     address public immutable memedToken; // The main MEME token address
+    string public uri;
     
     uint256 public currentTokenId;
 
@@ -50,11 +52,13 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
     constructor(
         address _memedToken,
         address _memedBattle,
-        address _factory
+        address _factory,
+        string memory _uri
     ) ERC721("Memed Warrior", "WARRIOR") Ownable(msg.sender) {
         memedToken = _memedToken;
         factory = IMemedFactory(_factory);
         memedBattle = IMemedBattle(_memedBattle);
+        uri = _uri;
     }
     
     /**
@@ -85,8 +89,8 @@ contract MemedWarriorNFT is ERC721, Ownable, ReentrancyGuard {
         // Mint NFT
         currentTokenId++;
         uint256 tokenId = currentTokenId;
- 
         _safeMint(msg.sender, tokenId);
+        _setTokenURI(tokenId, uri);
         
         // Store warrior data
         warriors[tokenId] = WarriorData({

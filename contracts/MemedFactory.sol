@@ -46,10 +46,6 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         uint256 indexed id,
         address indexed token,
         address indexed owner,
-        string name,
-        string ticker,
-        string description,
-        string image,
         bool isClaimedByCreator,
         uint256 createdAt
     );
@@ -84,13 +80,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         uniswapV3Factory = IUniswapV3Factory(positionManager.factory());
     }
 
-    function startFairLaunch(
-        address _creator,
-        string calldata _name,
-        string calldata _ticker,
-        string calldata _description,
-        string calldata _image
-    ) external onlyOwner {
+    function startFairLaunch(address _creator) external onlyOwner {
         if (_creator != address(0)) {
             require(
                 memedTokenSale.isMintable(_creator),
@@ -100,20 +90,12 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         uint256 id = memedTokenSale.startFairLaunch(_creator);
         TokenData storage token = tokenData[id];
         token.creator = _creator;
-        token.name = _name;
-        token.ticker = _ticker;
-        token.description = _description;
-        token.image = _image;
         token.isClaimedByCreator = _creator != address(0);
         tokenRewardData[id].lastRewardAt = INITIAL_REWARDS_PER_HEAT;
         emit TokenCreated(
             id,
             token.token,
             token.creator,
-            token.name,
-            token.ticker,
-            token.description,
-            token.image,
             token.isClaimedByCreator,
             block.timestamp
         );
@@ -141,25 +123,6 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         memedEngageToEarn.claimUnclaimedTokens(token.token, token.creator);
     }
 
-    function updateHeat(HeatUpdate[] calldata _heatUpdates) public {
-        require(
-            msg.sender == address(memedBattle) ||
-                msg.sender == memedBattle.getResolver() ||
-                msg.sender == owner(),
-            "unauthorized"
-        );
-
-        // Convert calldata to memory for internal processing
-        HeatUpdate[] memory heatUpdatesMemory = new HeatUpdate[](
-            _heatUpdates.length
-        );
-        for (uint i = 0; i < _heatUpdates.length; i++) {
-            heatUpdatesMemory[i] = _heatUpdates[i];
-        }
-
-        _updateHeatInternal(heatUpdatesMemory);
-    }
-
     function _updateHeatInternal(HeatUpdate[] memory _heatUpdates) internal {
         for (uint i = 0; i < _heatUpdates.length; i++) {
             TokenData storage token = tokenData[
@@ -169,13 +132,17 @@ contract MemedFactory is Ownable, ReentrancyGuard {
             TokenRewardData storage tokenReward = tokenRewardData[
                 memedTokenSale.tokenIdByAddress(_heatUpdates[i].token)
             ];
+
             require(
-                block.timestamp >= tokenReward.lastHeatUpdate + 1 days || msg.sender == memedBattle.getResolver(),
+                tokenReward.lastHeatUpdate == 0 ||
+                    block.timestamp >= tokenReward.lastHeatUpdate + 1 days ||
+                    msg.sender == memedBattle.getResolver(),
                 "Heat update too frequent"
             );
 
             uint256 oldHeat = tokenReward.heat;
             uint256 newHeat = _heatUpdates[i].heat;
+            require(newHeat >= oldHeat, "Invalid heat decrease");
 
             tokenReward.heat = newHeat;
             tokenReward.lastHeatUpdate = block.timestamp;
@@ -187,23 +154,37 @@ contract MemedFactory is Ownable, ReentrancyGuard {
                 tokenReward.lastRewardAt = 0;
             }
 
-            if (
-                (tokenReward.heat - tokenReward.lastRewardAt) >=
-                ENGAGEMENT_REWARDS_PER_NEW_HEAT &&
-                memedEngageToEarn.isRewardable(token.token)
-            ) {
-                memedEngageToEarn.registerEngagementReward(token.token);
-                tokenReward.lastRewardAt = tokenReward.heat;
+            if (memedEngageToEarn.isRewardable(token.token)) {
+                uint256 rewardableHeat = tokenReward.heat -
+                    tokenReward.lastRewardAt;
+                uint256 rewardsCount = rewardableHeat /
+                    ENGAGEMENT_REWARDS_PER_NEW_HEAT;
+                if (rewardsCount > 0) {
+                    for (uint256 j = 0; j < rewardsCount; j++) {
+                        memedEngageToEarn.registerEngagementReward(token.token);
+                    }
+                    tokenReward.lastRewardAt +=
+                        rewardsCount *
+                        ENGAGEMENT_REWARDS_PER_NEW_HEAT;
+                }
             }
 
             if (
                 token.isClaimedByCreator &&
-                tokenReward.heat - tokenReward.creatorIncentivesUnlockedAt >=
-                tokenReward.creatorIncentivesUnlocksAt &&
                 memedEngageToEarn.isCreatorRewardable(token.token)
             ) {
-                tokenReward.creatorIncentivesUnlockedAt = tokenReward.heat;
-                memedEngageToEarn.unlockCreatorIncentives(token.token);
+                uint256 rewardableCreatorHeat = tokenReward.heat -
+                    tokenReward.creatorIncentivesUnlockedAt;
+                uint256 unlocksCount = rewardableCreatorHeat /
+                    tokenReward.creatorIncentivesUnlocksAt;
+                if (unlocksCount > 0) {
+                    for (uint256 k = 0; k < unlocksCount; k++) {
+                        memedEngageToEarn.unlockCreatorIncentives(token.token);
+                    }
+                    tokenReward.creatorIncentivesUnlockedAt +=
+                        unlocksCount *
+                        tokenReward.creatorIncentivesUnlocksAt;
+                }
             }
 
             emit HeatUpdated(
@@ -260,7 +241,11 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         emit TokenCompletedFairLaunch(_id, _token, _warriorNFT);
 
         address pool = _createAndInitializePool(_token);
-        uint256 lpTokenId = _addLiquidityToPool(_token, IMemedToken(_token).LP_ALLOCATION(), memedTokenSale.LP_ETH());
+        uint256 lpTokenId = _addLiquidityToPool(
+            _token,
+            IMemedToken(_token).LP_ALLOCATION(),
+            memedTokenSale.LP_ETH()
+        );
         lpTokenIds[_token] = lpTokenId;
         memedTokenSale.completeFairLaunch(_id, _token, pool);
         if (token.isClaimedByCreator) {
@@ -268,7 +253,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         }
     }
 
-     function _sqrtRatio(uint256 x) internal pure returns (uint256 r) {
+    function _sqrtRatio(uint256 x) internal pure returns (uint256 r) {
         if (x == 0) return 0;
         uint256 z = (x + 1) >> 1;
         r = x;
@@ -278,23 +263,37 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         }
     }
 
-    function encodeSqrtRatioX96(uint256 amount1, uint256 amount0) internal pure returns (uint160) {
+    function encodeSqrtRatioX96(
+        uint256 amount1,
+        uint256 amount0
+    ) internal pure returns (uint160) {
         require(amount0 > 0 && amount1 > 0, "bad ratio");
-        uint256 ratioX192 = FullMath.mulDiv(amount1, uint256(1) << 192, amount0);
+        uint256 ratioX192 = FullMath.mulDiv(
+            amount1,
+            uint256(1) << 192,
+            amount0
+        );
         uint256 sqrtX96 = _sqrtRatio(ratioX192);
         require(sqrtX96 <= type(uint160).max, "sqrt overflow");
         return uint160(sqrtX96);
     }
 
-    function _roundToSpacing(int24 tick, int24 spacing, bool down) internal pure returns (int24) {
+    function _roundToSpacing(
+        int24 tick,
+        int24 spacing,
+        bool down
+    ) internal pure returns (int24) {
         int24 rem = tick % spacing;
         if (rem == 0) return tick;
-        return down
-            ? tick - rem - (tick < 0 ? spacing : int24(0))
-            : tick - rem + (tick > 0 ? spacing : int24(0));
+        return
+            down
+                ? tick - rem - (tick < 0 ? spacing : int24(0))
+                : tick - rem + (tick > 0 ? spacing : int24(0));
     }
 
-    function _createAndInitializePool(address _token) internal returns (address pool) {
+    function _createAndInitializePool(
+        address _token
+    ) internal returns (address pool) {
         (address token0, address token1) = _token < WETH
             ? (_token, WETH)
             : (WETH, _token);
@@ -304,14 +303,18 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         require(amountToken > 0 && amountEth > 0, "zero amounts");
 
         uint256 amount0 = token0 == _token ? amountToken : amountEth;
-        uint256 amount1 = token0 == _token ? amountEth   : amountToken;
+        uint256 amount1 = token0 == _token ? amountEth : amountToken;
 
         address existing = uniswapV3Factory.getPool(token0, token1, POOL_FEE);
         if (existing != address(0)) revert("POOL_EXISTS");
 
         uint160 sqrtPriceX96 = encodeSqrtRatioX96(amount1, amount0);
 
-        pool = IUniswapV3Factory(uniswapV3Factory).createPool(token0, token1, POOL_FEE);
+        pool = IUniswapV3Factory(uniswapV3Factory).createPool(
+            token0,
+            token1,
+            POOL_FEE
+        );
 
         IUniswapV3Pool(pool).initialize(sqrtPriceX96);
     }
@@ -326,13 +329,14 @@ contract MemedFactory is Ownable, ReentrancyGuard {
             : (WETH, _token);
 
         uint256 amount0Desired = token0 == _token ? tokenAmount : ethAmount;
-        uint256 amount1Desired = token0 == _token ? ethAmount   : tokenAmount;
+        uint256 amount1Desired = token0 == _token ? ethAmount : tokenAmount;
 
-        if (IERC20(_token).balanceOf(address(this)) < tokenAmount) revert("MISSING_BALANCE_TOKEN");
+        if (IERC20(_token).balanceOf(address(this)) < tokenAmount)
+            revert("MISSING_BALANCE_TOKEN");
         if (address(this).balance < ethAmount) revert("MISSING_BALANCE_ETH");
 
         uint160 sqrtPriceX96 = encodeSqrtRatioX96(
-            token0 == _token ? ethAmount   : tokenAmount,
+            token0 == _token ? ethAmount : tokenAmount,
             token0 == _token ? tokenAmount : ethAmount
         );
 
@@ -345,28 +349,30 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         int24 tickLower = _roundToSpacing(rawLower, spacing, true);
         int24 tickUpper = _roundToSpacing(rawUpper, spacing, false);
 
-        if (tickLower < TickMath.MIN_TICK) tickLower = TickMath.MIN_TICK - (TickMath.MIN_TICK % spacing);
-        if (tickUpper > TickMath.MAX_TICK) tickUpper = TickMath.MAX_TICK - (TickMath.MAX_TICK % spacing);
+        if (tickLower < TickMath.MIN_TICK)
+            tickLower = TickMath.MIN_TICK - (TickMath.MIN_TICK % spacing);
+        if (tickUpper > TickMath.MAX_TICK)
+            tickUpper = TickMath.MAX_TICK - (TickMath.MAX_TICK % spacing);
 
         IERC20(token0).approve(address(positionManager), amount0Desired);
         IERC20(token1).approve(address(positionManager), amount1Desired);
         IWETH(WETH).deposit{value: ethAmount}();
 
-          (uint256 lpTokenId, , , ) = positionManager.mint(
-                INonfungiblePositionManager.MintParams({
-                    token0: token0,
-                    token1: token1,
-                    fee: POOL_FEE,
-                    tickLower: tickLower,
-                    tickUpper: tickUpper,
-                    amount0Desired: amount0Desired,
-                    amount1Desired: amount1Desired,
-                    amount0Min: 0,
-                    amount1Min: 0,
-                    recipient: address(this),
-                    deadline: block.timestamp + 600
-                })
-            );
+        (uint256 lpTokenId, , , ) = positionManager.mint(
+            INonfungiblePositionManager.MintParams({
+                token0: token0,
+                token1: token1,
+                fee: POOL_FEE,
+                tickLower: tickLower,
+                tickUpper: tickUpper,
+                amount0Desired: amount0Desired,
+                amount1Desired: amount1Desired,
+                amount0Min: 0,
+                amount1Min: 0,
+                recipient: address(this),
+                deadline: block.timestamp + 600
+            })
+        );
         return lpTokenId;
     }
 

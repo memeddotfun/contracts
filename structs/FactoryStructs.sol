@@ -5,10 +5,6 @@ struct TokenData {
     address token;
     address warriorNFT;
     address creator;
-    string name;
-    string ticker;
-    string description;
-    string image;
     bool isClaimedByCreator;
 }
 
