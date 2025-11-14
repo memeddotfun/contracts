@@ -18,10 +18,12 @@ contract MemedBattle is Ownable, ReentrancyGuard {
     IMemedBattleResolver public battleResolver;
     IMemedFactory public factory;
     // Battle constants from Memed.fun v2.3 specification
-    uint256 public constant BATTLE_COOLDOWN = 14 days; // 14 days cooldown between battles
+    //uint256 public constant BATTLE_COOLDOWN = 14 days; // 14 days cooldown between battles
+    uint256 public constant BATTLE_COOLDOWN = 20 minutes; // 20 minutes cooldown between battles for testing
     
     mapping(address => BattleCooldown) public battleCooldowns;
-    uint256 public battleDuration = 7 days; // 7 days battle duration
+    //uint256 public constant BATTLE_DURATION = 7 days; // 7 days battle duration
+    uint256 public constant BATTLE_DURATION = 20 minutes; // 20 minutes battle duration for testing
     uint256 public battleCount;
     mapping(uint256 => Battle) public battles;
     mapping(address => uint256[]) public battleIds;
@@ -86,7 +88,7 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         Battle storage battle = battles[_battleId];
         battle.status = BattleStatus.STARTED;
         battle.startTime = block.timestamp;
-        battle.endTime = block.timestamp + battleDuration;
+        battle.endTime = block.timestamp + BATTLE_DURATION;
         battleCooldowns[battle.memeA].onBattle = true;
         battleCooldowns[battle.memeB].onBattle = true;
         battleCooldowns[battle.memeA].cooldownEndTime = block.timestamp + BATTLE_COOLDOWN;

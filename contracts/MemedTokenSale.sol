@@ -13,6 +13,8 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
     uint256 public constant RAISE_ETH = 40 ether;
     uint256 public constant LP_ETH = 39.6 ether;
     uint256 public constant PRICE_PER_TOKEN_WEI = 266_666_666_666;
+    uint256 public constant FAIR_LAUNCH_DURATION = 30 days; // 30 days fair launch duration
+    uint256 public constant FAIR_LAUNCH_COOLDOWN = 30 days; // 30 days fair launch cooldown
     IMemedFactory public memedFactory;
     uint256 public id;
 
@@ -75,7 +77,7 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
             id,
             _creator,
             block.timestamp,
-            block.timestamp + 30 days
+            block.timestamp + FAIR_LAUNCH_DURATION
         );
         return id;
     }
@@ -83,7 +85,7 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
     function commitToFairLaunch(uint256 _id) external payable nonReentrant {
         FairLaunchData storage f = fairLaunchData[_id];
         require(f.status == FairLaunchStatus.ACTIVE, "inactive");
-        require(block.timestamp <= f.fairLaunchStartTime + 30 days, "ended");
+        require(block.timestamp <= f.fairLaunchStartTime + FAIR_LAUNCH_DURATION, "ended");
         require(msg.value > 0, "zero");
 
         uint256 capLeft = RAISE_ETH - f.totalCommitted;
@@ -162,7 +164,7 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
     function refund(uint256 _id) external nonReentrant {
         FairLaunchData storage f = fairLaunchData[_id];
         require(
-            block.timestamp > f.fairLaunchStartTime + 30 days &&
+            block.timestamp > f.fairLaunchStartTime + FAIR_LAUNCH_COOLDOWN &&
                 f.totalCommitted < RAISE_ETH,
             "no"
         );
@@ -170,7 +172,7 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
             f.status = FairLaunchStatus.FAILED;
             blockedCreators[memedFactory.getCreatorById(_id)] =
                 block.timestamp +
-                30 days;
+                FAIR_LAUNCH_COOLDOWN;
             emit FairLaunchFailed(_id, f.totalCommitted);
         }
         Commitment storage c = f.commitments[msg.sender];
@@ -207,7 +209,7 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
     function isRefundable(uint256 _id) public view returns (bool) {
         FairLaunchData storage f = fairLaunchData[_id];
         return
-            block.timestamp > f.fairLaunchStartTime + 30 days &&
+            block.timestamp > f.fairLaunchStartTime + FAIR_LAUNCH_COOLDOWN &&
             f.totalCommitted < RAISE_ETH;
     }
     function getFairLaunchActive(address _t) public view returns (bool) {
