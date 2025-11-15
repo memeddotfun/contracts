@@ -20,3 +20,10 @@ struct CreatorData {
     uint256 balance;
     uint256 unlockedBalance;
 }
+
+struct DayData {
+    uint256 timestamp;
+    uint256 amountClaimed;
+    uint256 claimedByCreator;
+    uint256 creatorTimestamp;
+}
