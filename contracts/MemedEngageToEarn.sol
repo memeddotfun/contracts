@@ -15,6 +15,7 @@ contract MemedEngageToEarn is Ownable, ReentrancyGuard {
     constructor() Ownable(msg.sender) {}
 
     uint256 public constant MAX_REWARD = 550_000_000 * 1e18; // 550M tokens for engagement rewards (v2.3)
+    uint256 public constant MAX_REWARD_PER_REWARD_ID = 5000000 * 1e18; // 5M tokens for each reward id (v2.4)
     uint256 public constant CYCLE_REWARD_PERCENTAGE = 5; // 5% of engagement rewards per cycle for battles
     uint256 public constant ENGAGEMENT_REWARDS_PER_NFT_PERCENTAGE = 20; // 20% of engagement rewards per nft as per their price
     uint256 public constant ENGAGEMENT_REWARDS_CHANGE = 100 *1e18; // engagement rewards change per battle
@@ -49,7 +50,8 @@ contract MemedEngageToEarn is Ownable, ReentrancyGuard {
         uint256 remainingCap = MAX_REWARD - totalClaimed[_token];
         uint256 maxNFTsByCap = perNftReward > 0 ? (remainingCap / perNftReward) : 0;
         uint256 rewardableNFTs = totalNFTs < maxNFTsByCap ? totalNFTs : maxNFTsByCap;
-        uint256 totalReward = (rewardableNFTs * perNftReward) + change;
+        uint256 nftReward = (rewardableNFTs * perNftReward) + change;
+        uint256 totalReward = nftReward > MAX_REWARD_PER_REWARD_ID ? MAX_REWARD_PER_REWARD_ID : nftReward;
         require(totalReward > 0, "No reward");
         totalClaimed[_token] += totalReward;
         engagementRewardId++;

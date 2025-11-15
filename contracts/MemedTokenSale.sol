@@ -164,8 +164,7 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
     function refund(uint256 _id) external nonReentrant {
         FairLaunchData storage f = fairLaunchData[_id];
         require(
-            block.timestamp > f.fairLaunchStartTime + FAIR_LAUNCH_COOLDOWN &&
-                f.totalCommitted < RAISE_ETH,
+            isRefundable(_id),
             "no"
         );
         if (f.status != FairLaunchStatus.FAILED) {
@@ -206,12 +205,12 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
     ) external view returns (Commitment memory) {
         return fairLaunchData[_id].commitments[u];
     }
-    function isRefundable(uint256 _id) public view returns (bool) {
+   function isRefundable(uint256 _id) public view returns (bool) {
         FairLaunchData storage f = fairLaunchData[_id];
         return
-            block.timestamp > f.fairLaunchStartTime + FAIR_LAUNCH_COOLDOWN &&
+           (f.status == FairLaunchStatus.FAILED || f.status == FairLaunchStatus.ACTIVE) && block.timestamp > f.fairLaunchStartTime + FAIR_LAUNCH_DURATION &&
             f.totalCommitted < RAISE_ETH;
-    }
+}
     function getFairLaunchActive(address _t) public view returns (bool) {
         uint256 tid = tokenIdByAddress[_t];
         if (tid == 0) return false;
