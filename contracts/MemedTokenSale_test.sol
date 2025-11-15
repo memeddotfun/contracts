@@ -74,6 +74,10 @@ contract MemedTokenSale_test is Ownable, ReentrancyGuard {
         f.fairLaunchStartTime = block.timestamp;
         f.createdAt = block.timestamp;
         tokenIdsByCreator[_creator].push(id);
+        blockedCreators[_creator] =
+            block.timestamp +
+            FAIR_LAUNCH_COOLDOWN +
+            FAIR_LAUNCH_DURATION;
         emit FairLaunchStarted(
             id,
             _creator,
@@ -89,7 +93,10 @@ contract MemedTokenSale_test is Ownable, ReentrancyGuard {
     ) external nonReentrant {
         FairLaunchData storage f = fairLaunchData[_id];
         require(f.status == FairLaunchStatus.ACTIVE, "inactive");
-        require(block.timestamp <= f.fairLaunchStartTime + FAIR_LAUNCH_DURATION, "ended");
+        require(
+            block.timestamp <= f.fairLaunchStartTime + FAIR_LAUNCH_DURATION,
+            "ended"
+        );
         require(amount > 0, "zero");
         IERC20(MEMED_TEST_ETH).transferFrom(msg.sender, address(this), amount);
 
@@ -103,7 +110,8 @@ contract MemedTokenSale_test is Ownable, ReentrancyGuard {
             useAmount = (tokensOut * PRICE_PER_TOKEN_WEI) / DECIMALS;
         }
         uint256 refundAmount = amount > useAmount ? amount - useAmount : 0;
-        if (refundAmount > 0) IERC20(MEMED_TEST_ETH).transfer(msg.sender, refundAmount);
+        if (refundAmount > 0)
+            IERC20(MEMED_TEST_ETH).transfer(msg.sender, refundAmount);
 
         Commitment storage c = f.commitments[msg.sender];
         c.amount += useAmount;
@@ -114,7 +122,7 @@ contract MemedTokenSale_test is Ownable, ReentrancyGuard {
 
         emit CommitmentMade(_id, msg.sender, useAmount, tokensOut);
 
-        if (f.totalSold == TOTAL_FOR_SALE){
+        if (f.totalSold == TOTAL_FOR_SALE) {
             _completeFairLaunch(_id);
         }
     }
@@ -161,16 +169,10 @@ contract MemedTokenSale_test is Ownable, ReentrancyGuard {
 
     function refund(uint256 _id) external nonReentrant {
         FairLaunchData storage f = fairLaunchData[_id];
-        require(
-            isRefundable(_id),
-            "no"
-        );
+        require(isRefundable(_id), "no");
         if (f.status != FairLaunchStatus.FAILED) {
-        f.status = FairLaunchStatus.FAILED;
-        blockedCreators[memedFactory.getCreatorById(_id)] =
-            block.timestamp +
-            FAIR_LAUNCH_COOLDOWN;
-        emit FairLaunchFailed(_id, f.totalCommitted);
+            f.status = FairLaunchStatus.FAILED;
+            emit FairLaunchFailed(_id, f.totalCommitted);
         }
         Commitment storage c = f.commitments[msg.sender];
         require(c.amount > 0 && !c.refunded, "none");
@@ -205,7 +207,9 @@ contract MemedTokenSale_test is Ownable, ReentrancyGuard {
     function isRefundable(uint256 _id) public view returns (bool) {
         FairLaunchData storage f = fairLaunchData[_id];
         return
-           (f.status == FairLaunchStatus.FAILED || f.status == FairLaunchStatus.ACTIVE) && block.timestamp > f.fairLaunchStartTime + FAIR_LAUNCH_DURATION &&
+            (f.status == FairLaunchStatus.FAILED ||
+                f.status == FairLaunchStatus.ACTIVE) &&
+            block.timestamp > f.fairLaunchStartTime + FAIR_LAUNCH_DURATION &&
             f.totalCommitted < RAISE_ETH;
     }
     function getFairLaunchActive(address _t) public view returns (bool) {
