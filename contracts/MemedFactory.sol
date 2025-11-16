@@ -121,7 +121,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
             memedTokenSale.tokenIdByAddress(_token)
         ];
         rewardData.lastRewardAt = rewardData.heat;
-        rewardData.creatorIncentivesUnlockedAt = CREATOR_INCENTIVE_STEP;
+        rewardData.creatorIncentivesUnlockedAt = CREATOR_INCENTIVE_STEP + rewardData.heat;
         memedEngageToEarn.claimUnclaimedTokens(token.token, token.creator);
     }
 

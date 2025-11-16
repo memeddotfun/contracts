@@ -119,7 +119,7 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
             memedTokenSale.tokenIdByAddress(_token)
         ];
         r.lastRewardAt = r.heat;
-        r.creatorIncentivesUnlockedAt = CREATOR_INCENTIVE_STEP;
+        r.creatorIncentivesUnlockedAt = CREATOR_INCENTIVE_STEP + r.heat;
         memedEngageToEarn.claimUnclaimedTokens(t.token, t.creator);
     }
 
