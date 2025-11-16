@@ -27,6 +27,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
 
     // Engagement rewards
     uint256 public constant ENGAGEMENT_REWARDS_PER_NEW_HEAT = 50000; // For every 50,000 heat, 1 engagement reward is given
+    uint256 public constant CREATOR_INCENTIVE_STEP = 100000; // For every 100,000 heat, 1 creator incentive is given
 
     IMemedTokenSale public memedTokenSale;
     IMemedBattle public memedBattle;
@@ -120,6 +121,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
             memedTokenSale.tokenIdByAddress(_token)
         ];
         rewardData.lastRewardAt = rewardData.heat;
+        rewardData.creatorIncentivesUnlockedAt = CREATOR_INCENTIVE_STEP;
         memedEngageToEarn.claimUnclaimedTokens(token.token, token.creator);
     }
 
@@ -173,6 +175,10 @@ contract MemedFactory is Ownable, ReentrancyGuard {
                 token.isClaimedByCreator &&
                 memedEngageToEarn.isCreatorRewardable(token.token)
             ) {
+                if (tokenReward.creatorIncentivesUnlocksAt == 0) {
+                    tokenReward
+                        .creatorIncentivesUnlocksAt = CREATOR_INCENTIVE_STEP;
+                }
                 uint256 rewardableCreatorHeat = tokenReward.heat -
                     tokenReward.creatorIncentivesUnlockedAt;
                 uint256 unlocksCount = rewardableCreatorHeat /
@@ -249,6 +255,8 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         lpTokenIds[_token] = lpTokenId;
         memedTokenSale.completeFairLaunch(_id, _token, pool);
         if (token.isClaimedByCreator) {
+            tokenRewardData[_id]
+                .creatorIncentivesUnlockedAt = CREATOR_INCENTIVE_STEP;
             memedEngageToEarn.claimUnclaimedTokens(_token, token.creator);
         }
     }
