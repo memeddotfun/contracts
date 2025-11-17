@@ -24,7 +24,7 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
 
     uint256 public INITIAL_REWARDS_PER_HEAT = 100000;
     uint256 public BATTLE_REWARDS_PERCENTAGE = 20;
-    uint256 public constant ENGAGEMENT_REWARDS_PER_NEW_HEAT = 50000;
+    uint256 public constant ENGAGEMENT_REWARDS_PER_NEW_HEAT = 100000;
     uint256 public constant CREATOR_INCENTIVE_STEP = 100000;
 
     IMemedTokenSale public memedTokenSale;
@@ -119,7 +119,7 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
             memedTokenSale.tokenIdByAddress(_token)
         ];
         r.lastRewardAt = r.heat;
-        r.creatorIncentivesUnlockedAt = CREATOR_INCENTIVE_STEP + r.heat;
+        r.creatorIncentivesUnlockedAt = r.heat;
         memedEngageToEarn.claimUnclaimedTokens(t.token, t.creator);
     }
 
@@ -262,7 +262,7 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
         if (t.isClaimedByCreator) {
             memedEngageToEarn.claimUnclaimedTokens(_token, t.creator);
             tokenRewardData[_id]
-                .creatorIncentivesUnlockedAt = CREATOR_INCENTIVE_STEP;
+                .creatorIncentivesUnlockedAt = 0;
         }
     }
 

@@ -26,7 +26,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
     uint256 public BATTLE_REWARDS_PERCENTAGE = 20; // 20% of heat will be inceased or decreased based on the battle result
 
     // Engagement rewards
-    uint256 public constant ENGAGEMENT_REWARDS_PER_NEW_HEAT = 50000; // For every 50,000 heat, 1 engagement reward is given
+    uint256 public constant ENGAGEMENT_REWARDS_PER_NEW_HEAT = 100000; // For every 100,000 heat, 1 engagement reward is given
     uint256 public constant CREATOR_INCENTIVE_STEP = 100000; // For every 100,000 heat, 1 creator incentive is given
 
     IMemedTokenSale public memedTokenSale;
@@ -121,8 +121,20 @@ contract MemedFactory is Ownable, ReentrancyGuard {
             memedTokenSale.tokenIdByAddress(_token)
         ];
         rewardData.lastRewardAt = rewardData.heat;
-        rewardData.creatorIncentivesUnlockedAt = CREATOR_INCENTIVE_STEP + rewardData.heat;
+        rewardData.creatorIncentivesUnlockedAt = rewardData.heat;
         memedEngageToEarn.claimUnclaimedTokens(token.token, token.creator);
+    }
+
+    function updateHeat(HeatUpdate[] calldata _heatUpdates) public {
+        require(
+            msg.sender == address(memedBattle) ||
+                msg.sender == memedBattle.getResolver() ||
+                msg.sender == owner(),
+            "unauthorized"
+        );
+        HeatUpdate[] memory m = new HeatUpdate[](_heatUpdates.length);
+        for (uint i = 0; i < _heatUpdates.length; i++) m[i] = _heatUpdates[i];
+        _updateHeatInternal(m);
     }
 
     function _updateHeatInternal(HeatUpdate[] memory _heatUpdates) internal {
@@ -256,7 +268,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         memedTokenSale.completeFairLaunch(_id, _token, pool);
         if (token.isClaimedByCreator) {
             tokenRewardData[_id]
-                .creatorIncentivesUnlockedAt = CREATOR_INCENTIVE_STEP;
+                .creatorIncentivesUnlockedAt = 0;
             memedEngageToEarn.claimUnclaimedTokens(_token, token.creator);
         }
     }
