@@ -149,7 +149,7 @@ contract MemedEngageToEarn is Ownable, ReentrancyGuard {
     function getBattleRewardPool(
         address _token
     ) external view returns (uint256) {
-        uint256 balance = IERC20(_token).balanceOf(address(this));
+        uint256 balance = MAX_REWARD - totalClaimed[_token];
         return (balance * CYCLE_REWARD_PERCENTAGE) / 100;
     }
 
@@ -238,6 +238,7 @@ contract MemedEngageToEarn is Ownable, ReentrancyGuard {
         );
 
         require(amountOut > 0, "Swap failed");
+        totalClaimed[_loser] += _loserAmount;
         return amountOut;
     }
 

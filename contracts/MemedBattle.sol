@@ -190,69 +190,7 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         battleAllocations[_battleId][msg.sender][battle.winner].claimed = true;
         emit BattleRewardsClaimed(_battleId, msg.sender, reward);
     }
-
-    /**
-     * @dev Batch claim rewards from multiple battles
-     * @param _battleIds Array of battle IDs to claim rewards from
-     */
-    function batchClaimRewards(uint256[] calldata _battleIds) external nonReentrant {
-        require(_battleIds.length > 0, "No battle IDs provided");
-        require(_battleIds.length <= 50, "Too many battles to claim at once"); // Prevent gas limit issues
-        
-        uint256 totalRewardsClaimed = 0;
-        address rewardToken;
-        
-        for (uint256 i = 0; i < _battleIds.length; i++) {
-            uint256 _battleId = _battleIds[i];
-            Battle storage battle = battles[_battleId];
-            
-            // Skip if battle not resolved
-            if (battle.status != BattleStatus.RESOLVED) {
-                continue;
-            }
-            
-            // Skip if already claimed
-            if (battleAllocations[_battleId][msg.sender][battle.winner].claimed) {
-                continue;
-            }
-            
-            // Skip if user didn't participate or supported the loser
-            UserBattleAllocation storage allocation = battleAllocations[_battleId][msg.sender][battle.winner];
-            if (allocation.nftsIds.length == 0) {
-                continue;
-            }
-            
-            // Calculate reward
-            uint256 totalNftsAllocated = battle.winner == battle.memeA ? battle.memeANftsAllocated : battle.memeBNftsAllocated;
-            if (totalNftsAllocated == 0) {
-                continue;
-            }
-            
-            uint256 reward = (battle.totalReward * allocation.nftsIds.length) / totalNftsAllocated;
-            
-            // Skip if no reward
-            if (reward == 0) {
-                continue;
-            }
-            
-            // Set reward token (should be the same for all battles in a batch)
-            if (rewardToken == address(0)) {
-                rewardToken = battle.winner;
-            }
-            
-            // Mark as claimed
-            allocation.claimed = true;
-            totalRewardsClaimed += reward;
-            
-            emit BattleRewardsClaimed(_battleId, msg.sender, reward);
-        }
-        
-        // Transfer total rewards in a single transaction
-        if (totalRewardsClaimed > 0 && rewardToken != address(0)) {
-            IERC20(rewardToken).transfer(msg.sender, totalRewardsClaimed);
-        }
-    }
-
+    
     /**
      * @dev Get all claimable battle rewards for a user
      * @param _user User address
