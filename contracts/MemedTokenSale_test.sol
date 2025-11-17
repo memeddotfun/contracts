@@ -221,7 +221,10 @@ contract MemedTokenSale_test is Ownable, ReentrancyGuard {
         uint256[] memory ids = tokenIdsByCreator[_c];
         for (uint i = 0; i < ids.length; i++) {
             FairLaunchStatus s = fairLaunchData[ids[i]].status;
-            if (s == FairLaunchStatus.COMPLETED || (s == FairLaunchStatus.ACTIVE && !isRefundable(ids[i]))) return true;
+            if (
+                s == FairLaunchStatus.COMPLETED ||
+                (s == FairLaunchStatus.ACTIVE && !isRefundable(ids[i]))
+            ) return true;
         }
         return false;
     }

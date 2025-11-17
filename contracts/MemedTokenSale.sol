@@ -199,12 +199,14 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
         FairLaunchData storage f = fairLaunchData[_id];
         return f.status;
     }
+
     function getUserCommitment(
         uint256 _id,
         address u
     ) external view returns (Commitment memory) {
         return fairLaunchData[_id].commitments[u];
     }
+
     function isRefundable(uint256 _id) public view returns (bool) {
         FairLaunchData storage f = fairLaunchData[_id];
         return
@@ -213,23 +215,30 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
             block.timestamp > f.fairLaunchStartTime + FAIR_LAUNCH_DURATION &&
             f.totalCommitted < RAISE_ETH;
     }
+
     function getFairLaunchActive(address _t) public view returns (bool) {
         uint256 tid = tokenIdByAddress[_t];
         if (tid == 0) return false;
         return fairLaunchData[tid].status == FairLaunchStatus.ACTIVE;
     }
+
     function _tokenExists(address _c) internal view returns (bool) {
         uint256[] memory ids = tokenIdsByCreator[_c];
         for (uint i = 0; i < ids.length; i++) {
             FairLaunchStatus s = fairLaunchData[ids[i]].status;
-            if (s == FairLaunchStatus.COMPLETED || (s == FairLaunchStatus.ACTIVE && !isRefundable(ids[i]))) return true;
+            if (
+                s == FairLaunchStatus.COMPLETED ||
+                (s == FairLaunchStatus.ACTIVE && !isRefundable(ids[i]))
+            ) return true;
         }
         return false;
     }
+
     function isCreatorBlocked(address _c) public view returns (bool, uint256) {
         uint256 e = blockedCreators[_c];
         return (block.timestamp < e, e);
     }
+
     function isMintable(address _c) public view returns (bool) {
         (bool b, ) = isCreatorBlocked(_c);
         return !_tokenExists(_c) && !b;
@@ -244,6 +253,7 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
         ) return 0;
         return RAISE_ETH - f.totalCommitted;
     }
+
     function quoteNetForTokens(uint256 tokens) public pure returns (uint256) {
         return (tokens * PRICE_PER_TOKEN_WEI) / DECIMALS;
     }

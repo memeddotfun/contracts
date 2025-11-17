@@ -12,41 +12,34 @@ import "../interfaces/IMemedEngageToEarn.sol";
 import "../interfaces/IMemedToken.sol";
 import "../structs/WarriorStructs.sol";
 
-
 contract MemedWarriorNFT is ERC721URIStorage, Ownable, ReentrancyGuard {
     // Base price and dynamic pricing constants from Memed.md specification
     uint256 public constant BASE_PRICE = 5000 * 1e18; // 5,000 MEME base price
     uint256 public constant PRICE_INCREMENT = 100 * 1e18; // +100 MEME per 10,000 Heat Score
     uint256 public constant HEAT_THRESHOLD = 10000; // 10,000 Heat Score threshold
-    
+
     IMemedFactory public immutable factory;
     IMemedBattle public immutable memedBattle;
     address public immutable memedToken; // The main MEME token address
     string public uri;
-    
+
     uint256 public currentTokenId;
 
     // NFT data structure
-    
+
     mapping(uint256 => WarriorData) public warriors;
     mapping(address => uint256[]) public userNFTs; // Track user's NFTs
-    
+
     event WarriorMinted(
-        uint256 indexed tokenId, 
+        uint256 indexed tokenId,
         address indexed owner,
         uint256 price
     );
 
-    event WarriorAllocated(
-        uint256 indexed tokenId, 
-        address indexed owner
-    );
-    
-    event WarriorGetBack(
-        uint256 indexed tokenId, 
-        address indexed owner
-    );
-    
+    event WarriorAllocated(uint256 indexed tokenId, address indexed owner);
+
+    event WarriorGetBack(uint256 indexed tokenId, address indexed owner);
+
     event TokensBurned(uint256 amount, uint256 totalPlatformHeat);
 
     constructor(
@@ -62,7 +55,7 @@ contract MemedWarriorNFT is ERC721URIStorage, Ownable, ReentrancyGuard {
         memedBattle = IMemedBattle(_memedBattle);
         uri = _uri;
     }
-    
+
     /**
      * @dev Calculate current NFT price based on platform Heat Score
      * Price = 5,000 MEME + (100 MEME × (Total Heat Score ÷ 10,000))
@@ -72,28 +65,28 @@ contract MemedWarriorNFT is ERC721URIStorage, Ownable, ReentrancyGuard {
         uint256 priceBoost = (totalHeat / HEAT_THRESHOLD) * PRICE_INCREMENT;
         return BASE_PRICE + priceBoost;
     }
-    
+
     /**
      * @dev Mint a Warrior NFT - requires MEME tokens, 1% fee collected, rest burned
      */
     function mintWarrior() external nonReentrant returns (uint256) {
         uint256 price = getCurrentPrice();
-        
+
         // Check balance
         require(
             IERC20(memedToken).balanceOf(msg.sender) >= price,
             "Insufficient MEME tokens"
         );
-        
+
         // Burn tokens directly from user (requires approval)
         _burnTokens(msg.sender, price);
-        
+
         // Mint NFT
         currentTokenId++;
         uint256 tokenId = currentTokenId;
         _safeMint(msg.sender, tokenId);
         _setTokenURI(tokenId, uri);
-        
+
         // Store warrior data
         warriors[tokenId] = WarriorData({
             tokenId: tokenId,
@@ -102,14 +95,14 @@ contract MemedWarriorNFT is ERC721URIStorage, Ownable, ReentrancyGuard {
             mintedAt: block.timestamp,
             allocated: false
         });
-        
+
         userNFTs[msg.sender].push(tokenId);
-        
+
         emit WarriorMinted(tokenId, msg.sender, price);
-        
+
         return tokenId;
     }
-    
+
     /** Get back the warrior NFTs to the user if they win the battle
      * @dev Get back the warrior NFTs to the user if they win the battle
      */
@@ -117,13 +110,19 @@ contract MemedWarriorNFT is ERC721URIStorage, Ownable, ReentrancyGuard {
         require(_exists(_nftId), "NFT does not exist");
         require(ownerOf(_nftId) == msg.sender, "Not the owner");
         require(warriors[_nftId].allocated, "NFT not allocated");
-        (, bool isReturnable) = memedBattle.getNftRewardAndIsReturnable(memedToken, _nftId);
+        (, bool isReturnable) = memedBattle.getNftRewardAndIsReturnable(
+            memedToken,
+            _nftId
+        );
         require(isReturnable, "NFT not returnable");
         warriors[_nftId].allocated = false;
         emit WarriorGetBack(_nftId, msg.sender);
     }
 
-    function allocateNFTsToBattle(address _user, uint256[] calldata _nftsIds) external {
+    function allocateNFTsToBattle(
+        address _user,
+        uint256[] calldata _nftsIds
+    ) external {
         require(msg.sender == address(memedBattle), "Only battle contract");
         for (uint256 i = 0; i < _nftsIds.length; i++) {
             require(_exists(_nftsIds[i]), "NFT does not exist");
@@ -134,7 +133,7 @@ contract MemedWarriorNFT is ERC721URIStorage, Ownable, ReentrancyGuard {
             emit WarriorAllocated(_nftsIds[i], owner);
         }
     }
-    
+
     /**
      * @dev Check if user owns any active Warrior NFTs
      */
@@ -147,37 +146,39 @@ contract MemedWarriorNFT is ERC721URIStorage, Ownable, ReentrancyGuard {
         }
         return false;
     }
-    
+
     /**
      * @dev Get user's active NFTs
      */
-    function getUserActiveNFTs(address _user) external view returns (uint256[] memory) {
+    function getUserActiveNFTs(
+        address _user
+    ) external view returns (uint256[] memory) {
         uint256[] memory userTokens = userNFTs[_user];
         uint256 activeCount = 0;
-        
+
         // Count active NFTs
         for (uint256 i = 0; i < userTokens.length; i++) {
             if (_exists(userTokens[i])) {
                 activeCount++;
             }
         }
-        
+
         // Build active NFTs array
         uint256[] memory activeNFTs = new uint256[](activeCount);
         uint256 index = 0;
-        
+
         for (uint256 i = 0; i < userTokens.length; i++) {
             if (_exists(userTokens[i])) {
                 activeNFTs[index] = userTokens[i];
                 index++;
             }
         }
-        
+
         return activeNFTs;
     }
-    
+
     /**
-    * @dev Burn MEME tokens from user using burnFrom (requires approval)
+     * @dev Burn MEME tokens from user using burnFrom (requires approval)
      */
     function _burnTokens(address _from, uint256 _amount) internal {
         IMemedToken(memedToken).burnFrom(_from, _amount);
@@ -194,7 +195,7 @@ contract MemedWarriorNFT is ERC721URIStorage, Ownable, ReentrancyGuard {
             }
         }
     }
-    
+
     /**
      * @dev Override transfer to update ownership tracking
      */
@@ -204,20 +205,23 @@ contract MemedWarriorNFT is ERC721URIStorage, Ownable, ReentrancyGuard {
         address auth
     ) internal override returns (address) {
         address from = super._update(to, tokenId, auth);
-        
+
         if (from != address(0) && to != address(0)) {
             // Update warrior owner data
             warriors[tokenId].owner = to;
-            
+
             // Update user NFT tracking
             _removeFromUserNFTs(from, tokenId);
             userNFTs[to].push(tokenId);
         }
-        
+
         return from;
     }
-    
-    function getWarriorMintedBeforeByUser(address _user, uint256 _timestamp) external view returns (uint256[] memory) {
+
+    function getWarriorMintedBeforeByUser(
+        address _user,
+        uint256 _timestamp
+    ) external view returns (uint256[] memory) {
         uint256[] memory nfts = userNFTs[_user];
         uint256[] memory mintedBefore = new uint256[](nfts.length);
         for (uint256 i = 0; i < nfts.length; i++) {

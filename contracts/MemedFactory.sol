@@ -267,8 +267,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         lpTokenIds[_token] = lpTokenId;
         memedTokenSale.completeFairLaunch(_id, _token, pool);
         if (token.isClaimedByCreator) {
-            tokenRewardData[_id]
-                .creatorIncentivesUnlockedAt = 0;
+            tokenRewardData[_id].creatorIncentivesUnlockedAt = 0;
             memedEngageToEarn.claimUnclaimedTokens(_token, token.creator);
         }
     }

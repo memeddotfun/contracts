@@ -247,28 +247,30 @@ contract MemedEngageToEarn is Ownable, ReentrancyGuard {
         factory = IMemedFactory(_factory);
     }
 
-function isRewardable(address _token) external view returns (bool) {
-    uint256 totalNFTs = IMemedWarriorNFT(factory.getWarriorNFT(_token)).currentTokenId();
-    if (totalNFTs == 0) return false;
+    function isRewardable(address _token) external view returns (bool) {
+        uint256 totalNFTs = IMemedWarriorNFT(factory.getWarriorNFT(_token))
+            .currentTokenId();
+        if (totalNFTs == 0) return false;
 
-    uint256 nftPrice = IMemedWarriorNFT(factory.getWarriorNFT(_token)).getCurrentPrice();
-    uint256 perNftReward = (nftPrice * ENGAGEMENT_REWARDS_PER_NFT_PERCENTAGE) / 100;
-    if (perNftReward == 0) return false;
+        uint256 nftPrice = IMemedWarriorNFT(factory.getWarriorNFT(_token))
+            .getCurrentPrice();
+        uint256 perNftReward = (nftPrice *
+            ENGAGEMENT_REWARDS_PER_NFT_PERCENTAGE) / 100;
+        if (perNftReward == 0) return false;
 
-    uint256 todaysClaimed = dayData[_token].amountClaimed;
-    if (block.timestamp > dayData[_token].timestamp + 1 days) {
-        todaysClaimed = 0;
+        uint256 todaysClaimed = dayData[_token].amountClaimed;
+        if (block.timestamp > dayData[_token].timestamp + 1 days) {
+            todaysClaimed = 0;
+        }
+
+        uint256 remainingDaily = MAX_REWARD_PER_DAY - todaysClaimed;
+        if (remainingDaily < perNftReward) return false;
+
+        uint256 remainingGlobal = MAX_REWARD - totalClaimed[_token];
+        if (remainingGlobal < perNftReward) return false;
+
+        return true;
     }
-
-    uint256 remainingDaily = MAX_REWARD_PER_DAY - todaysClaimed;
-    if (remainingDaily < perNftReward) return false;
-
-    uint256 remainingGlobal = MAX_REWARD - totalClaimed[_token];
-    if (remainingGlobal < perNftReward) return false;
-
-    return true;
-}
-
 
     function unlockCreatorIncentives(address _token) external {
         require(
@@ -279,8 +281,12 @@ function isRewardable(address _token) external view returns (bool) {
             dayData[_token].creatorTimestamp = block.timestamp;
             dayData[_token].claimedByCreator = 0;
         }
-        uint256 remainingToday = MAX_REWARD_PER_DAY - dayData[_token].claimedByCreator;
-        require(remainingToday >= CREATOR_ALLOCATION_PER_UNLOCK, "Daily cap reached");
+        uint256 remainingToday = MAX_REWARD_PER_DAY -
+            dayData[_token].claimedByCreator;
+        require(
+            remainingToday >= CREATOR_ALLOCATION_PER_UNLOCK,
+            "Daily cap reached"
+        );
         uint256 unlockAmount = CREATOR_ALLOCATION_PER_UNLOCK;
         require(
             creatorData[_token].balance >= unlockAmount,

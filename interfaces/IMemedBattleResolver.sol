@@ -7,4 +7,3 @@ interface IMemedBattleResolver {
     function addBattleIdsToResolve(uint256 _battleId) external;
     function resolveBattle(uint256 _battleId) external;
 }
-

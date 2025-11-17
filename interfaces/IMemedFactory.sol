@@ -28,4 +28,3 @@ interface IMemedFactory {
     function battleUpdate(address _winner, address _loser) external;
     function getCreatorById(uint256 _id) external view returns (address);
 }
-
