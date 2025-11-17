@@ -5,7 +5,8 @@ enum BattleStatus {
     NOT_STARTED,
     CHALLENGED,
     STARTED,
-    RESOLVED
+    RESOLVED,
+    DRAW
 }
 
 struct TokenBattleAllocation {

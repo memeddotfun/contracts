@@ -18,13 +18,6 @@ contract MemedBattleResolver is Ownable {
     IMemedBattle public immutable battleContract;
     uint256[] public battleIdsToResolve;
 
-    event BattleResolved(
-        uint256 indexed battleId,
-        address indexed winner,
-        address indexed loser,
-        uint256 totalReward
-    );
-
     constructor(address _battle) Ownable(msg.sender) {
         battleContract = IMemedBattle(_battle);
     }
@@ -70,7 +63,13 @@ contract MemedBattleResolver is Ownable {
             battle.memeBNftsAllocated
         );
 
-        address actualWinner = finalScoreA >= finalScoreB
+        if (finalScoreA == finalScoreB) {
+            battleContract.resolveBattle(_battleId, address(0), 0);
+            _battleIdResolved(_battleId);
+            return;
+        }
+
+        address actualWinner = finalScoreA > finalScoreB
             ? battle.memeA
             : battle.memeB;
         address actualLoser = actualWinner == battle.memeA
@@ -92,7 +91,6 @@ contract MemedBattleResolver is Ownable {
 
         battleContract.resolveBattle(_battleId, actualWinner, totalReward);
         _battleIdResolved(_battleId);
-        emit BattleResolved(_battleId, actualWinner, actualLoser, totalReward);
     }
 
     function _calculateScore(
@@ -101,11 +99,21 @@ contract MemedBattleResolver is Ownable {
         uint256 initialHeat,
         uint256 nftsAllocated
     ) internal view returns (uint256) {
-        uint256 heatScore = factory.getHeat(token) - initialHeat;
-        uint256 valueScore = IMemedWarriorNFT(factory.getWarriorNFT(token))
-            .getCurrentPrice() * nftsAllocated;
+        uint256 currentHeat = factory.getHeat(token);
+        require(currentHeat >= initialHeat, "Invalid heat calculation");
+        
+        uint256 heatScore = currentHeat - initialHeat;
+        uint256 currentPrice = IMemedWarriorNFT(factory.getWarriorNFT(token))
+            .getCurrentPrice();
+        uint256 valueScore = currentPrice * nftsAllocated;
+        
+        uint256 totalWeight = ENGAGEMENT_WEIGHT + VALUE_WEIGHT;
+        if (totalWeight == 0) {
+            return 0;
+        }
+        
         return
-            (heatScore * ENGAGEMENT_WEIGHT + valueScore * VALUE_WEIGHT) / 100;
+            (heatScore * ENGAGEMENT_WEIGHT + valueScore * VALUE_WEIGHT) / totalWeight;
     }
 
     function _processBattleRewards(

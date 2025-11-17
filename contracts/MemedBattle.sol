@@ -41,6 +41,11 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         address loser,
         uint256 totalReward
     );
+    event BattleDraw(
+        uint256 battleId,
+        address memeA,
+        address memeB
+    );
     event UserAllocated(
         uint256 battleId,
         address user,
@@ -149,28 +154,41 @@ contract MemedBattle is Ownable, ReentrancyGuard {
     ) external {
         require(msg.sender == address(battleResolver), "Unauthorized");
         Battle storage battle = battles[_battleId];
-        address actualLoser = _actualWinner == battle.memeA
-            ? battle.memeB
-            : battle.memeA;
-        battle.winner = _actualWinner;
-        battle.status = BattleStatus.RESOLVED;
-        tokenBattleAllocations[_actualWinner].winCount += _actualWinner ==
-            battle.memeA
-            ? battle.memeANftsAllocated
-            : battle.memeBNftsAllocated;
-        tokenBattleAllocations[actualLoser].loseCount += actualLoser ==
-            battle.memeA
-            ? battle.memeANftsAllocated
-            : battle.memeBNftsAllocated;
-        battleCooldowns[_actualWinner].onBattle = false;
-        battleCooldowns[actualLoser].onBattle = false;
-        battle.totalReward = _totalReward;
-        emit BattleResolved(
-            _battleId,
-            _actualWinner,
-            actualLoser,
-            _totalReward
-        );
+        require(battle.status == BattleStatus.STARTED, "Battle not started");
+        
+        if (_actualWinner == address(0)) {
+            battle.status = BattleStatus.DRAW;
+            battle.winner = address(0);
+            battle.totalReward = 0;
+            
+            battleCooldowns[battle.memeA].onBattle = false;
+            battleCooldowns[battle.memeB].onBattle = false;
+            
+            emit BattleDraw(_battleId, battle.memeA, battle.memeB);
+        } else {
+            address actualLoser = _actualWinner == battle.memeA
+                ? battle.memeB
+                : battle.memeA;
+            battle.winner = _actualWinner;
+            battle.status = BattleStatus.RESOLVED;
+            tokenBattleAllocations[_actualWinner].winCount += _actualWinner ==
+                battle.memeA
+                ? battle.memeANftsAllocated
+                : battle.memeBNftsAllocated;
+            tokenBattleAllocations[actualLoser].loseCount += actualLoser ==
+                battle.memeA
+                ? battle.memeANftsAllocated
+                : battle.memeBNftsAllocated;
+            battleCooldowns[_actualWinner].onBattle = false;
+            battleCooldowns[actualLoser].onBattle = false;
+            battle.totalReward = _totalReward;
+            emit BattleResolved(
+                _battleId,
+                _actualWinner,
+                actualLoser,
+                _totalReward
+            );
+        }
     }
 
     function allocateNFTsToBattle(
