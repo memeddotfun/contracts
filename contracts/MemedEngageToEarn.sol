@@ -278,17 +278,18 @@ function isRewardable(address _token) external view returns (bool) {
             dayData[_token].creatorTimestamp = block.timestamp;
             dayData[_token].claimedByCreator = 0;
         }
-        uint256 amount = MAX_REWARD_PER_DAY - dayData[_token].claimedByCreator;
-        require(amount >= CREATOR_ALLOCATION_PER_UNLOCK, "Daily cap reached");
+        uint256 remainingToday = MAX_REWARD_PER_DAY - dayData[_token].claimedByCreator;
+        require(remainingToday >= CREATOR_ALLOCATION_PER_UNLOCK, "Daily cap reached");
+        uint256 unlockAmount = CREATOR_ALLOCATION_PER_UNLOCK;
         require(
-            creatorData[_token].balance >= amount,
+            creatorData[_token].balance >= unlockAmount,
             "Not enough balance to unlock"
         );
-        creatorData[_token].unlockedBalance += amount;
-        creatorData[_token].balance -= amount;
-        dayData[_token].claimedByCreator += amount;
+        creatorData[_token].unlockedBalance += unlockAmount;
+        creatorData[_token].balance -= unlockAmount;
+        dayData[_token].claimedByCreator += unlockAmount;
         dayData[_token].creatorTimestamp = block.timestamp;
-        emit CreatorIncentivesUnlocked(amount);
+        emit CreatorIncentivesUnlocked(unlockAmount);
     }
 
     function claimCreatorIncentives(address _token) external {
