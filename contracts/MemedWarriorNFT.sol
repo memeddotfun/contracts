@@ -50,11 +50,13 @@ contract MemedWarriorNFT is ERC721URIStorage, Ownable, ReentrancyGuard {
     event TokensBurned(uint256 amount, uint256 totalPlatformHeat);
 
     constructor(
+        string memory _name,
+        string memory _symbol,
         address _memedToken,
         address _memedBattle,
         address _factory,
         string memory _uri
-    ) ERC721("Memed Warrior", "WARRIOR") Ownable(msg.sender) {
+    ) ERC721(_name, _symbol) Ownable(msg.sender) {
         memedToken = _memedToken;
         factory = IMemedFactory(_factory);
         memedBattle = IMemedBattle(_memedBattle);
