@@ -71,7 +71,7 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         address token,
         uint256 amount
     );
-
+    event BattleRejected(uint256 battleId, address memeA, address memeB);
     constructor() Ownable(msg.sender) {}
 
     function challengeBattle(
@@ -118,7 +118,7 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         battleCount++;
     }
 
-    function acceptBattle(uint256 _battleId) external nonReentrant {
+    function acceptOrRejectBattle(uint256 _battleId, bool _accept) external nonReentrant {
         Battle storage battle = battles[_battleId];
         require(
             battle.status == BattleStatus.CHALLENGED,
@@ -127,7 +127,12 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         TokenData memory tokenB = factory.getByToken(battle.memeB);
         require(tokenB.token != address(0), "MemeB is not minted");
         require(tokenB.creator == msg.sender, "Unauthorized");
-        _startBattle(_battleId);
+        if (_accept) {
+            _startBattle(_battleId);
+        } else {
+            battle.status = BattleStatus.REJECTED;
+            emit BattleRejected(_battleId, battle.memeA, battle.memeB);
+        }
     }
 
     function _startBattle(uint256 _battleId) internal {

@@ -6,7 +6,8 @@ enum BattleStatus {
     CHALLENGED,
     STARTED,
     RESOLVED,
-    DRAW
+    DRAW,
+    REJECTED
 }
 
 struct TokenBattleAllocation {

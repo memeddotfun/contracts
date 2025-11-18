@@ -13,6 +13,7 @@ async function main() {
   
   const uniswapV3PositionManager = "0x27F971cb582BF9E50F397e4d29a5C7A34f11faA2";
   const uniswapV3SwapRouter = "0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4";
+  const kmsAddress = "0xA9225Bd06a7c10AcB4e4833b7fed51c3Cd696103";
   const { battle } = await ignition.deploy(battleModule);
   console.log("MemedBattle deployed to:", battle.address);
   const { battleResolver } = await ignition.deploy(battleResolverModule, {
@@ -63,6 +64,16 @@ async function main() {
   
   console.log("Setting factory address in MemedTokenSale...");
   await tokenSale.write.setFactory([config.factory]);
+  
+  // Set owner of all contracts to the KMS address
+  console.log("Transferring ownership of all contracts to the KMS address...");
+  await battle.write.transferOwnership([kmsAddress]);
+  console.log("Transferring ownership of MemedEngageToEarn to the KMS address...");
+  await engageToEarn.write.transferOwnership([kmsAddress]);
+  console.log("Transferring ownership of MemedTokenSale to the KMS address...");
+  await tokenSale.write.transferOwnership([kmsAddress]);
+  console.log("Transferring ownership of MemedFactory to the KMS address...");
+  await factory.write.transferOwnership([kmsAddress]);
   
   console.log("Deployment completed successfully!");
 }
