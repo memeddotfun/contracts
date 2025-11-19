@@ -243,9 +243,9 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
         address _warriorNFT
     ) external onlyOwner {
         TokenData storage t = tokenData[_id];
-        FairLaunchStatus status = memedTokenSale.getFairLaunchStatus(_id);
-        require(status == FairLaunchStatus.READY_TO_COMPLETE, "not ready");
+        require(memedTokenSale.isCompletable(_id), "not completable");
 
+        memedTokenSale.finalizeSale(_id);
         t.token = _token;
         t.warriorNFT = _warriorNFT;
         tokens.push(_token);

@@ -16,4 +16,6 @@ interface IMemedTokenSale {
     function getFairLaunchStatus(
         uint256 _id
     ) external view returns (FairLaunchStatus);
+    function finalizeSale(uint256 _id) external;
+    function isCompletable(uint256 _id) external view returns (bool);
 }

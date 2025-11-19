@@ -13,8 +13,9 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
     uint256 public constant RAISE_ETH = 40 ether;
     uint256 public constant LP_ETH = 39.6 ether;
     uint256 public constant PRICE_PER_TOKEN_WEI = 266_666_666_666;
-    uint256 public constant FAIR_LAUNCH_DURATION = 30 days; // 30 days fair launch duration
-    uint256 public constant FAIR_LAUNCH_COOLDOWN = 30 days; // 30 days fair launch cooldown
+    uint256 public constant FAIR_LAUNCH_DURATION = 30 days;
+    uint256 public constant FAIR_LAUNCH_COOLDOWN = 30 days;
+
     IMemedFactory public memedFactory;
     uint256 public id;
 
@@ -23,34 +24,15 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
     mapping(address => uint256) public tokenIdByAddress;
     mapping(address => uint256) public blockedCreators;
 
-    event FairLaunchStarted(
-        uint256 indexed id,
-        address indexed creator,
-        uint256 start,
-        uint256 end
-    );
-    event CommitmentMade(
-        uint256 indexed id,
-        address indexed user,
-        uint256 amount,
-        uint256 tokens
-    );
-    event CommitmentCancelled(
-        uint256 indexed id,
-        address indexed user,
-        uint256 amount,
-        uint256 tokens
-    );
-    event FairLaunchReadyToComplete(uint256 indexed id);
-    event FairLaunchCompleted(
-        uint256 indexed id,
-        address indexed token,
-        address indexed pair,
-        uint256 totalRaised
-    );
+    event FairLaunchStarted(uint256 indexed id, address indexed creator, uint256 start, uint256 end);
+    event CommitmentMade(uint256 indexed id, address indexed user, uint256 amount, uint256 tokens);
+    event CommitmentCancelled(uint256 indexed id, address indexed user, uint256 amount, uint256 tokens);
+    event FairLaunchCompleted(uint256 indexed id, address indexed token, address indexed pair, uint256 totalRaised);
     event FairLaunchFailed(uint256 indexed id, uint256 totalRaised);
+    event Claimed(uint256 indexed id, address indexed user, uint256 tokens, uint256 refund);
 
     constructor() Ownable(msg.sender) {}
+
     modifier onlyFactory() {
         require(msg.sender == address(memedFactory), "factory only");
         _;
@@ -64,8 +46,7 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
     }
 
     function startFairLaunch(address _creator) external returns (uint256) {
-        if (_creator != address(0))
-            require(isMintable(_creator), "blocked or exists");
+        if (_creator != address(0)) require(isMintable(_creator), "blocked or exists");
         require(msg.sender == address(memedFactory), "factory only");
         id++;
         FairLaunchData storage f = fairLaunchData[id];
@@ -73,94 +54,56 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
         f.fairLaunchStartTime = block.timestamp;
         f.createdAt = block.timestamp;
         tokenIdsByCreator[_creator].push(id);
-        blockedCreators[_creator] =
-            block.timestamp +
-            FAIR_LAUNCH_COOLDOWN +
-            FAIR_LAUNCH_DURATION;
-        emit FairLaunchStarted(
-            id,
-            _creator,
-            block.timestamp,
-            block.timestamp + FAIR_LAUNCH_DURATION
-        );
+        blockedCreators[_creator] = block.timestamp + FAIR_LAUNCH_COOLDOWN + FAIR_LAUNCH_DURATION;
+        emit FairLaunchStarted(id, _creator, block.timestamp, block.timestamp + FAIR_LAUNCH_DURATION);
         return id;
     }
 
     function commitToFairLaunch(uint256 _id) external payable nonReentrant {
         FairLaunchData storage f = fairLaunchData[_id];
         require(f.status == FairLaunchStatus.ACTIVE, "inactive");
-        require(
-            block.timestamp <= f.fairLaunchStartTime + FAIR_LAUNCH_DURATION,
-            "ended"
-        );
+        require(block.timestamp <= f.fairLaunchStartTime + FAIR_LAUNCH_DURATION, "ended");
         require(msg.value > 0, "zero");
 
-        uint256 capLeft = RAISE_ETH - f.totalCommitted;
-        require(capLeft > 0, "cap");
-        uint256 useAmount = msg.value > capLeft ? capLeft : msg.value;
-        uint256 tokensOut = (useAmount * DECIMALS) / PRICE_PER_TOKEN_WEI;
-        uint256 remaining = TOTAL_FOR_SALE - f.totalSold;
-        if (tokensOut > remaining) {
-            tokensOut = remaining;
-            useAmount = (tokensOut * PRICE_PER_TOKEN_WEI) / DECIMALS;
-        }
-        uint256 refundAmount = msg.value > useAmount
-            ? msg.value - useAmount
-            : 0;
-        if (refundAmount > 0) {
-            (bool okr, ) = payable(msg.sender).call{value: refundAmount}("");
-            require(okr, "refund");
-        }
-
         Commitment storage c = f.commitments[msg.sender];
-        c.amount += useAmount;
-        c.tokenAmount += tokensOut;
-        f.totalSold += tokensOut;
-        f.totalCommitted += useAmount;
-        f.balance[msg.sender] += tokensOut;
+        c.amount += msg.value;
+        f.totalCommitted += msg.value;
 
-        emit CommitmentMade(_id, msg.sender, useAmount, tokensOut);
-
-        if (f.totalSold == TOTAL_FOR_SALE) _completeFairLaunch(_id);
+        emit CommitmentMade(_id, msg.sender, msg.value, 0);
     }
 
     function cancelCommit(uint256 _id) external nonReentrant {
         FairLaunchData storage f = fairLaunchData[_id];
         require(f.status == FairLaunchStatus.ACTIVE, "state");
+        require(block.timestamp <= f.fairLaunchStartTime + FAIR_LAUNCH_DURATION, "ended");
         Commitment storage c = f.commitments[msg.sender];
-        require(c.amount > 0 || c.tokenAmount > 0, "none");
+        require(c.amount > 0, "none");
         uint256 amt = c.amount;
-        uint256 tok = c.tokenAmount;
         c.amount = 0;
-        c.tokenAmount = 0;
         f.totalCommitted -= amt;
-        f.totalSold -= tok;
-        f.balance[msg.sender] -= tok;
         (bool ok, ) = payable(msg.sender).call{value: amt}("");
         require(ok, "xfer");
-        emit CommitmentCancelled(_id, msg.sender, amt, tok);
+        emit CommitmentCancelled(_id, msg.sender, amt, 0);
     }
 
-    function _completeFairLaunch(uint256 _id) internal {
+    function finalizeSale(uint256 _id) external nonReentrant onlyFactory {
         FairLaunchData storage f = fairLaunchData[_id];
         require(f.status == FairLaunchStatus.ACTIVE, "state");
-        require(f.totalSold == TOTAL_FOR_SALE, "!=150M");
-        uint256 fee = f.totalCommitted - LP_ETH;
+        require(block.timestamp > f.fairLaunchStartTime + FAIR_LAUNCH_DURATION, "not ended");
+        require(f.totalCommitted >= RAISE_ETH, "min not reached");
+
+        uint256 ethForAllocation = f.totalCommitted > RAISE_ETH ? RAISE_ETH : f.totalCommitted;
+        f.totalSold = TOTAL_FOR_SALE;
+
+        uint256 fee = ethForAllocation - LP_ETH;
         (bool ok1, ) = payable(owner()).call{value: fee}("");
         require(ok1, "fee");
         (bool ok2, ) = payable(address(memedFactory)).call{value: LP_ETH}("");
         require(ok2, "xfer");
-        f.status = FairLaunchStatus.READY_TO_COMPLETE;
-        emit FairLaunchReadyToComplete(_id);
     }
 
-    function completeFairLaunch(
-        uint256 _id,
-        address _token,
-        address _pair
-    ) external onlyFactory {
+    function completeFairLaunch(uint256 _id, address _token, address _pair) external onlyFactory {
         FairLaunchData storage f = fairLaunchData[_id];
-        require(f.status == FairLaunchStatus.READY_TO_COMPLETE, "not ready");
         f.status = FairLaunchStatus.COMPLETED;
         f.uniswapPair = _pair;
         tokenIdByAddress[_token] = _id;
@@ -185,35 +128,56 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
         FairLaunchData storage f = fairLaunchData[_id];
         require(f.status == FairLaunchStatus.COMPLETED, "incomplete");
         Commitment storage c = f.commitments[msg.sender];
-        require(c.tokenAmount > 0 && !c.claimed, "none");
+        require(c.amount > 0 && !c.claimed, "none");
+
+        uint256 userTokens;
+        if (f.totalCommitted >= RAISE_ETH) {
+            userTokens = (c.amount * TOTAL_FOR_SALE) / f.totalCommitted;
+        } else {
+            userTokens = (c.amount * DECIMALS) / PRICE_PER_TOKEN_WEI;
+        }
+
         c.claimed = true;
-        IERC20(memedFactory.getTokenById(_id).token).transfer(
-            msg.sender,
-            c.tokenAmount
-        );
+        c.tokenAmount = userTokens;
+        f.balance[msg.sender] = userTokens;
+
+        IERC20(memedFactory.getTokenById(_id).token).transfer(msg.sender, userTokens);
+
+        uint256 refundAmount = 0;
+        if (f.totalCommitted > RAISE_ETH && !c.refunded) {
+            uint256 ethUsed = (c.amount * RAISE_ETH) / f.totalCommitted;
+            refundAmount = c.amount - ethUsed;
+            c.refunded = true;
+            (bool ok, ) = payable(msg.sender).call{value: refundAmount}("");
+            require(ok, "xfer");
+        }
+
+        emit Claimed(_id, msg.sender, userTokens, refundAmount);
     }
 
-    function getFairLaunchStatus(
-        uint256 _id
-    ) public view returns (FairLaunchStatus) {
+    function getFairLaunchStatus(uint256 _id) public view returns (FairLaunchStatus) {
         FairLaunchData storage f = fairLaunchData[_id];
         return f.status;
     }
 
-    function getUserCommitment(
-        uint256 _id,
-        address u
-    ) external view returns (Commitment memory) {
+    function getUserCommitment(uint256 _id, address u) external view returns (Commitment memory) {
         return fairLaunchData[_id].commitments[u];
     }
 
     function isRefundable(uint256 _id) public view returns (bool) {
         FairLaunchData storage f = fairLaunchData[_id];
         return
-            (f.status == FairLaunchStatus.FAILED ||
-                f.status == FairLaunchStatus.ACTIVE) &&
+            (f.status == FairLaunchStatus.FAILED || f.status == FairLaunchStatus.ACTIVE) &&
             block.timestamp > f.fairLaunchStartTime + FAIR_LAUNCH_DURATION &&
             f.totalCommitted < RAISE_ETH;
+    }
+
+    function isCompletable(uint256 _id) public view returns (bool) {
+        FairLaunchData storage f = fairLaunchData[_id];
+        return
+            f.status == FairLaunchStatus.ACTIVE &&
+            block.timestamp > f.fairLaunchStartTime + FAIR_LAUNCH_DURATION &&
+            f.totalCommitted >= RAISE_ETH;
     }
 
     function getFairLaunchActive(address _t) public view returns (bool) {
@@ -244,17 +208,25 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
         return !_tokenExists(_c) && !b;
     }
 
-    function getMaxCommittableETH(uint256 _id) public view returns (uint256) {
+    function getExpectedClaim(uint256 _id, address user) public view returns (uint256 tokens, uint256 refundAmount) {
         FairLaunchData storage f = fairLaunchData[_id];
-        if (
-            f.status != FairLaunchStatus.ACTIVE ||
-            f.totalCommitted >= RAISE_ETH ||
-            f.totalSold >= TOTAL_FOR_SALE
-        ) return 0;
-        return RAISE_ETH - f.totalCommitted;
+        Commitment storage c = f.commitments[user];
+
+        if (c.amount == 0) return (0, 0);
+
+        if (f.totalCommitted >= RAISE_ETH) {
+            tokens = (c.amount * TOTAL_FOR_SALE) / f.totalCommitted;
+            if (f.totalCommitted > RAISE_ETH && !c.refunded) {
+                uint256 ethUsed = (c.amount * RAISE_ETH) / f.totalCommitted;
+                refundAmount = c.amount - ethUsed;
+            }
+        } else {
+            tokens = (c.amount * DECIMALS) / PRICE_PER_TOKEN_WEI;
+            refundAmount = 0;
+        }
     }
 
-    function quoteNetForTokens(uint256 tokens) public pure returns (uint256) {
-        return (tokens * PRICE_PER_TOKEN_WEI) / DECIMALS;
+    function quoteNetForTokens(uint256 tokenAmount) public pure returns (uint256) {
+        return (tokenAmount * PRICE_PER_TOKEN_WEI) / DECIMALS;
     }
 }
