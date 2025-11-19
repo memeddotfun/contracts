@@ -24,7 +24,6 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
     mapping(address => uint256) public tokenIdByAddress;
     mapping(address => uint256) public blockedCreators;
 
-    event FairLaunchStarted(uint256 indexed id, address indexed creator, uint256 start, uint256 end);
     event CommitmentMade(uint256 indexed id, address indexed user, uint256 amount, uint256 tokens);
     event CommitmentCancelled(uint256 indexed id, address indexed user, uint256 amount, uint256 tokens);
     event FairLaunchCompleted(uint256 indexed id, address indexed token, address indexed pair, uint256 totalRaised);
@@ -45,18 +44,19 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
         memedFactory = IMemedFactory(_f);
     }
 
-    function startFairLaunch(address _creator) external returns (uint256) {
-        if (_creator != address(0)) require(isMintable(_creator), "blocked or exists");
-        require(msg.sender == address(memedFactory), "factory only");
+    function startFairLaunch(address _creator) external onlyFactory returns (uint256, uint256) {
+        if (_creator != address(0)) {
+            require(isMintable(_creator), "blocked or exists");
+            blockedCreators[_creator] = block.timestamp + FAIR_LAUNCH_COOLDOWN + FAIR_LAUNCH_DURATION;
+            tokenIdsByCreator[_creator].push(id);
+        }
         id++;
         FairLaunchData storage f = fairLaunchData[id];
         f.status = FairLaunchStatus.ACTIVE;
         f.fairLaunchStartTime = block.timestamp;
         f.createdAt = block.timestamp;
-        tokenIdsByCreator[_creator].push(id);
-        blockedCreators[_creator] = block.timestamp + FAIR_LAUNCH_COOLDOWN + FAIR_LAUNCH_DURATION;
-        emit FairLaunchStarted(id, _creator, block.timestamp, block.timestamp + FAIR_LAUNCH_DURATION);
-        return id;
+        uint256 endTime = block.timestamp + FAIR_LAUNCH_DURATION;
+        return (id, endTime);
     }
 
     function commitToFairLaunch(uint256 _id) external payable nonReentrant {

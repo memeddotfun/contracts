@@ -48,7 +48,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         address indexed token,
         address indexed owner,
         bool isClaimedByCreator,
-        uint256 createdAt
+        uint256 endTime
     );
 
     event TokenCompletedFairLaunch(
@@ -88,7 +88,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
                 "Creator is blocked or already has a token"
             );
         }
-        uint256 id = memedTokenSale.startFairLaunch(_creator);
+        (uint256 id, uint256 endTime) = memedTokenSale.startFairLaunch(_creator);
         TokenData storage token = tokenData[id];
         token.creator = _creator;
         token.isClaimedByCreator = _creator != address(0);
@@ -98,7 +98,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
             token.token,
             token.creator,
             token.isClaimedByCreator,
-            block.timestamp
+            endTime
         );
     }
 
