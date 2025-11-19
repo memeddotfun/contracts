@@ -13,7 +13,7 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
     uint256 public constant RAISE_ETH = 40 ether;
     uint256 public constant LP_ETH = 39.6 ether;
     uint256 public constant PRICE_PER_TOKEN_WEI = 266_666_666_666;
-    uint256 public constant FAIR_LAUNCH_DURATION = 30 days;
+    uint256 public constant FAIR_LAUNCH_DURATION = 1 weeks;
     uint256 public constant FAIR_LAUNCH_COOLDOWN = 30 days;
 
     IMemedFactory public memedFactory;
