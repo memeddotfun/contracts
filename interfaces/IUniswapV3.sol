@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
+
 pragma solidity ^0.8.28;
 
+/// @title IUniswapV3Factory
+/// @notice Interface for Uniswap V3 Factory
 interface IUniswapV3Factory {
     function createPool(
         address tokenA,

@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: MIT
+
 pragma solidity ^0.8.28;
 
 import "../structs/FactoryStructs.sol";
 
+/// @title IMemedFactory
+/// @notice Interface for the Memed Factory contract
 interface IMemedFactory {
     function getByToken(
         address _token

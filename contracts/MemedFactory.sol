@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: MIT
+
 pragma solidity ^0.8.28;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+
 import "../interfaces/IMemedBattle.sol";
 import "../interfaces/IUniswapV3.sol";
 import "../interfaces/IMemedToken.sol";
@@ -14,6 +16,8 @@ import "../interfaces/IWETH.sol";
 import "../libraries/TickMath.sol";
 import "../libraries/FullMath.sol";
 
+/// @title Memed Factory
+/// @notice Manages token creation, liquidity provisioning, and reward distribution
 contract MemedFactory is Ownable, ReentrancyGuard {
     uint256 public constant REWARD_PER_ENGAGEMENT = 100000;
     uint256 public constant MAX_ENGAGE_USER_REWARD_PERCENTAGE = 2;
@@ -21,13 +25,11 @@ contract MemedFactory is Ownable, ReentrancyGuard {
 
     address public constant WETH = 0x4200000000000000000000000000000000000006;
 
-    // Battle rewards
-    uint256 public INITIAL_REWARDS_PER_HEAT = 100000; // 100,000 of heat will be required to unlock the battle rewards
-    uint256 public BATTLE_REWARDS_PERCENTAGE = 20; // 20% of heat will be inceased or decreased based on the battle result
+    uint256 public INITIAL_REWARDS_PER_HEAT = 100000;
+    uint256 public BATTLE_REWARDS_PERCENTAGE = 20;
 
-    // Engagement rewards
-    uint256 public constant ENGAGEMENT_REWARDS_PER_NEW_HEAT = 100000; // For every 100,000 heat, 1 engagement reward is given
-    uint256 public constant CREATOR_INCENTIVE_STEP = 100000; // For every 100,000 heat, 1 creator incentive is given
+    uint256 public constant ENGAGEMENT_REWARDS_PER_NEW_HEAT = 100000;
+    uint256 public constant CREATOR_INCENTIVE_STEP = 100000;
 
     IMemedTokenSale public memedTokenSale;
     IMemedBattle public memedBattle;
@@ -35,14 +37,12 @@ contract MemedFactory is Ownable, ReentrancyGuard {
 
     mapping(uint256 => TokenData) public tokenData;
     mapping(uint256 => TokenRewardData) public tokenRewardData;
-    mapping(address => uint256) public lpTokenIds; // Store LP NFT token IDs for fee collection
+    mapping(address => uint256) public lpTokenIds;
     address[] public tokens;
     INonfungiblePositionManager public positionManager;
     IUniswapV3Factory public uniswapV3Factory;
     ISwapRouter public swapRouter;
-    uint24 public constant POOL_FEE = 3000; // 0.3%
-
-    // Events
+    uint24 public constant POOL_FEE = 3000;
     event TokenCreated(
         uint256 indexed id,
         address indexed token,
@@ -81,6 +81,8 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         uniswapV3Factory = IUniswapV3Factory(positionManager.factory());
     }
 
+    /// @notice Start a new fair launch for a token
+    /// @param _creator The address of the token creator
     function startFairLaunch(address _creator) external onlyOwner {
         if (_creator != address(0)) {
             require(
@@ -102,6 +104,9 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         );
     }
 
+    /// @notice Claim a token for a creator who was not the initial launcher
+    /// @param _token The token address to claim
+    /// @param _creator The creator address claiming the token
     function claimToken(
         address _token,
         address _creator
@@ -125,6 +130,8 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         memedEngageToEarn.claimUnclaimedTokens(token.token, token.creator);
     }
 
+    /// @notice Update heat scores for multiple tokens
+    /// @param _heatUpdates Array of heat updates containing token addresses and new heat values
     function updateHeat(HeatUpdate[] calldata _heatUpdates) public {
         require(
             msg.sender == address(memedBattle) ||
@@ -137,6 +144,8 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         _updateHeatInternal(m);
     }
 
+    /// @dev Internal function to update heat and process rewards
+    /// @param _heatUpdates Array of heat updates to process
     function _updateHeatInternal(HeatUpdate[] memory _heatUpdates) internal {
         for (uint i = 0; i < _heatUpdates.length; i++) {
             TokenData storage token = tokenData[
@@ -213,6 +222,9 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         }
     }
 
+    /// @notice Update token rewards based on battle outcome
+    /// @param _winner Address of the winning token
+    /// @param _loser Address of the losing token
     function battleUpdate(address _winner, address _loser) external {
         require(
             msg.sender == address(memedBattle) ||
@@ -241,6 +253,10 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         );
     }
 
+    /// @notice Complete a fair launch and deploy Uniswap pool
+    /// @param _id The fair launch ID
+    /// @param _token The deployed token address
+    /// @param _warriorNFT The deployed warrior NFT address
     function completeFairLaunch(
         uint256 _id,
         address _token,
@@ -269,6 +285,9 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         }
     }
 
+    /// @dev Calculate the square root of a uint256
+    /// @param x The value to calculate square root for
+    /// @return r The square root
     function _sqrtRatio(uint256 x) internal pure returns (uint256 r) {
         if (x == 0) return 0;
         uint256 z = (x + 1) >> 1;
@@ -279,6 +298,10 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         }
     }
 
+    /// @dev Encode the sqrt price as a Q64.96 value
+    /// @param amount1 The amount of token1
+    /// @param amount0 The amount of token0
+    /// @return The sqrt price encoded as Q64.96
     function encodeSqrtRatioX96(
         uint256 amount1,
         uint256 amount0
@@ -294,6 +317,11 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         return uint160(sqrtX96);
     }
 
+    /// @dev Round tick to nearest valid tick spacing
+    /// @param tick The tick to round
+    /// @param spacing The tick spacing
+    /// @param down Whether to round down or up
+    /// @return The rounded tick
     function _roundToSpacing(
         int24 tick,
         int24 spacing,
@@ -307,6 +335,9 @@ contract MemedFactory is Ownable, ReentrancyGuard {
                 : tick - rem + (tick > 0 ? spacing : int24(0));
     }
 
+    /// @dev Create and initialize a Uniswap V3 pool for the token
+    /// @param _token The token address to create pool for
+    /// @return pool The address of the created pool
     function _createAndInitializePool(
         address _token
     ) internal returns (address pool) {
@@ -335,6 +366,11 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         IUniswapV3Pool(pool).initialize(sqrtPriceX96);
     }
 
+    /// @dev Add liquidity to the Uniswap V3 pool
+    /// @param _token The token address
+    /// @param tokenAmount The amount of tokens to add
+    /// @param ethAmount The amount of ETH to add
+    /// @return The LP NFT token ID
     function _addLiquidityToPool(
         address _token,
         uint256 tokenAmount,
@@ -392,6 +428,11 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         return lpTokenId;
     }
 
+    /// @notice Swap tokens through Uniswap V3
+    /// @param _amount The amount of input tokens to swap
+    /// @param _path The swap path (must route through WETH)
+    /// @param _to The recipient address
+    /// @return The amount of output tokens received
     function swap(
         uint256 _amount,
         address[] calldata _path,
@@ -440,12 +481,10 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         return amountOut;
     }
 
-    /**
-     * @dev Collect accumulated swap fees from a Uniswap V3 LP position
-     * @param _token The token address for which to collect fees
-     * @return amount0 Amount of token0 fees collected
-     * @return amount1 Amount of token1 fees collected
-     */
+    /// @notice Collect accumulated swap fees from a Uniswap V3 LP position
+    /// @param _token The token address for which to collect fees
+    /// @return amount0 Amount of token0 fees collected
+    /// @return amount1 Amount of token1 fees collected
     function collectFees(
         address _token
     ) external onlyOwner returns (uint256 amount0, uint256 amount1) {
@@ -462,22 +501,37 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         );
     }
 
+    /// @notice Get token data by token address
+    /// @param _token The token address
+    /// @return TokenData struct containing token information
     function getByToken(address _token) public view returns (TokenData memory) {
         return tokenData[memedTokenSale.tokenIdByAddress(_token)];
     }
 
+    /// @notice Get the warrior NFT address for a token
+    /// @param _token The token address
+    /// @return The warrior NFT contract address
     function getWarriorNFT(address _token) external view returns (address) {
         return tokenData[memedTokenSale.tokenIdByAddress(_token)].warriorNFT;
     }
 
+    /// @notice Get the creator address by token ID
+    /// @param _id The token ID
+    /// @return The creator address
     function getCreatorById(uint256 _id) external view returns (address) {
         return tokenData[_id].creator;
     }
 
+    /// @notice Get the current heat score for a token
+    /// @param _token The token address
+    /// @return The current heat score
     function getHeat(address _token) external view returns (uint256) {
         return tokenRewardData[memedTokenSale.tokenIdByAddress(_token)].heat;
     }
 
+    /// @notice Get token data by address with validation
+    /// @param _token The token address
+    /// @return TokenData struct containing token information
     function getTokenByAddress(
         address _token
     ) public view returns (TokenData memory) {
@@ -488,20 +542,29 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         return token;
     }
 
+    /// @notice Get token data by ID
+    /// @param _id The token ID
+    /// @return TokenData struct containing token information
     function getTokenById(
         uint256 _id
     ) external view returns (TokenData memory) {
         return tokenData[_id];
     }
 
+    /// @notice Get the Memed Engage To Earn contract instance
+    /// @return The IMemedEngageToEarn interface
     function getMemedEngageToEarn() external view returns (IMemedEngageToEarn) {
         return memedEngageToEarn;
     }
 
+    /// @notice Get the Memed Battle contract address
+    /// @return The battle contract address
     function getMemedBattle() external view returns (address) {
         return address(memedBattle);
     }
 
+    /// @notice Get all tokens
+    /// @return Array of TokenData structs for all tokens
     function getTokens() external view returns (TokenData[] memory) {
         TokenData[] memory result = new TokenData[](tokens.length);
         for (uint i = 0; i < tokens.length; i++) {

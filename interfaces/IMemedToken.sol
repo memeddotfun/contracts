@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
+
 pragma solidity ^0.8.28;
 
+/// @title IMemedToken
+/// @notice Interface for the Memed Token contract
 interface IMemedToken {
     function LP_ALLOCATION() external view returns (uint256);
     function burn(uint256 amount) external;

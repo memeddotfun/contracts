@@ -1,17 +1,19 @@
 // SPDX-License-Identifier: MIT
+
 pragma solidity ^0.8.28;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
+/// @title Memed Token
+/// @notice ERC20 token with fixed supply and token distribution
 contract MemedToken is ERC20, Ownable {
-    uint256 public constant MAX_SUPPLY = 1000000000 * 1e18; // 1B (100%)
+    uint256 public constant MAX_SUPPLY = 1000000000 * 1e18;
 
-    // Token distribution according to Memed.fun v2.3 tokenomics
-    uint256 public constant FAIR_LAUNCH_ALLOCATION = 150000000 * 1e18; // 150M (15%)
-    uint256 public constant LP_ALLOCATION = 100000000 * 1e18; // 100M (10%)
-    uint256 public constant ENGAGEMENT_REWARDS_ALLOCATION = 550000000 * 1e18; // 550M (55%)
-    uint256 public constant CREATOR_INCENTIVES_ALLOCATION = 200000000 * 1e18; // 200M (20%)
+    uint256 public constant FAIR_LAUNCH_ALLOCATION = 150000000 * 1e18;
+    uint256 public constant LP_ALLOCATION = 100000000 * 1e18;
+    uint256 public constant ENGAGEMENT_REWARDS_ALLOCATION = 550000000 * 1e18;
+    uint256 public constant CREATOR_INCENTIVES_ALLOCATION = 200000000 * 1e18;
 
     constructor(
         string memory _name,
@@ -28,16 +30,15 @@ contract MemedToken is ERC20, Ownable {
         _mint(_memedTokenSale, FAIR_LAUNCH_ALLOCATION);
     }
 
-    /**
-     * @dev Allows anyone to burn their own tokens
-     */
+    /// @notice Allows anyone to burn their own tokens
+    /// @param amount The amount of tokens to burn
     function burn(uint256 amount) external {
         _burn(msg.sender, amount);
     }
 
-    /**
-     * @dev Allows burning tokens from an account that has approved the caller
-     */
+    /// @notice Allows burning tokens from an account that has approved the caller
+    /// @param account The account to burn tokens from
+    /// @param amount The amount of tokens to burn
     function burnFrom(address account, uint256 amount) external {
         _spendAllowance(account, msg.sender, amount);
         _burn(account, amount);

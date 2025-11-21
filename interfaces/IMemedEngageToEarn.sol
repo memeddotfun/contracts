@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
+
 pragma solidity ^0.8.28;
 
+/// @title IMemedEngageToEarn
+/// @notice Interface for the Memed Engage To Earn contract
 interface IMemedEngageToEarn {
     function ENGAGEMENT_REWARDS_PER_NFT_PERCENTAGE()
         external

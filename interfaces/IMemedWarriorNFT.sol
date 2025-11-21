@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
+
 pragma solidity ^0.8.28;
 
+/// @title IMemedWarriorNFT
+/// @notice Interface for the Memed Warrior NFT contract
 interface IMemedWarriorNFT {
     function hasActiveWarrior(address user) external view returns (bool);
     function getUserActiveNFTs(

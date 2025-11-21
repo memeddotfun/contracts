@@ -1,26 +1,30 @@
 // SPDX-License-Identifier: MIT
+
 pragma solidity ^0.8.28;
 
 import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+
 import "../interfaces/IMemedWarriorNFT.sol";
 import "../interfaces/IMemedFactory.sol";
 import "../interfaces/IMemedBattle.sol";
 import "../structs/BattleStructs.sol";
 import "../structs/EngageToEarnStructs.sol";
 
+/// @title Memed Engage To Earn
+/// @notice Manages engagement rewards and creator incentives
 contract MemedEngageToEarn is Ownable, ReentrancyGuard {
     constructor() Ownable(msg.sender) {}
 
-    uint256 public constant MAX_REWARD = 550_000_000 * 1e18; // 550M tokens for engagement rewards (v2.3)
-    uint256 public constant MAX_REWARD_PER_DAY = 5000000 * 1e18; // 5M tokens for each day (v2.4)
-    uint256 public constant CYCLE_REWARD_PERCENTAGE = 5; // 5% of engagement rewards per cycle for battles
-    uint256 public constant ENGAGEMENT_REWARDS_PER_NFT_PERCENTAGE = 20; // 20% of engagement rewards per nft as per their price
-    uint256 public constant ENGAGEMENT_REWARDS_CHANGE = 100 * 1e18; // engagement rewards change per battle
-    uint256 public constant CREATOR_INCENTIVES_ALLOCATION = 200000000 * 1e18; // 200M (20%)
-    uint256 public constant CREATOR_ALLOCATION_PER_UNLOCK = 5000000 * 1e18; // 5M tokens
+    uint256 public constant MAX_REWARD = 550_000_000 * 1e18;
+    uint256 public constant MAX_REWARD_PER_DAY = 5000000 * 1e18;
+    uint256 public constant CYCLE_REWARD_PERCENTAGE = 5;
+    uint256 public constant ENGAGEMENT_REWARDS_PER_NFT_PERCENTAGE = 20;
+    uint256 public constant ENGAGEMENT_REWARDS_CHANGE = 100 * 1e18;
+    uint256 public constant CREATOR_INCENTIVES_ALLOCATION = 200000000 * 1e18;
+    uint256 public constant CREATOR_ALLOCATION_PER_UNLOCK = 5000000 * 1e18;
     IMemedFactory public factory;
     uint256 public engagementRewardId;
 
@@ -44,12 +48,17 @@ contract MemedEngageToEarn is Ownable, ReentrancyGuard {
     event CreatorIncentivesClaimed(uint256 amount);
     event CreatorSet(address to);
 
+    /// @notice Get engagement reward details by ID
+    /// @param _rewardId The reward ID
+    /// @return The engagement reward struct
     function getEngagementReward(
         uint256 _rewardId
     ) external view returns (EngagementReward memory) {
         return engagementRewards[_rewardId];
     }
 
+    /// @notice Register a new engagement reward for a token
+    /// @param _token The token address
     function registerEngagementReward(address _token) external {
         require(
             msg.sender == address(factory),
@@ -113,6 +122,8 @@ contract MemedEngageToEarn is Ownable, ReentrancyGuard {
         );
     }
 
+    /// @notice Claim engagement rewards based on NFT ownership
+    /// @param _rewardId The reward ID to claim from
     function claimEngagementReward(uint256 _rewardId) public nonReentrant {
         require(!isClaimedByUser[_rewardId][msg.sender], "Already claimed");
         EngagementReward memory reward = engagementRewards[_rewardId];
@@ -143,9 +154,9 @@ contract MemedEngageToEarn is Ownable, ReentrancyGuard {
         emit EngagementRewardClaimed(msg.sender, _rewardId, amount);
     }
 
-    /**
-     * @dev Get battle reward pool (5% of engagement rewards per cycle)
-     */
+    /// @notice Get battle reward pool (5% of engagement rewards per cycle)
+    /// @param _token The token address
+    /// @return The battle reward pool amount
     function getBattleRewardPool(
         address _token
     ) external view returns (uint256) {
@@ -153,6 +164,8 @@ contract MemedEngageToEarn is Ownable, ReentrancyGuard {
         return (balance * CYCLE_REWARD_PERCENTAGE) / 100;
     }
 
+    /// @notice Get all claimable engagement rewards for the caller
+    /// @return Array of EngagementRewardClaim structs
     function getUserEngagementReward()
         public
         view
@@ -200,13 +213,12 @@ contract MemedEngageToEarn is Ownable, ReentrancyGuard {
         return engagementRewardsClaims;
     }
 
-    /**
-     * @dev Swap loser tokens to winner tokens for battle rewards
-     * Routes through WETH: loser -> WETH -> winner
-     * @param _loser Loser token address (token to swap from)
-     * @param _winner Winner token address (token to swap to)
-     * @param _loserAmount Amount of loser tokens to swap
-     */
+    /// @notice Swap loser tokens to winner tokens for battle rewards
+    /// @dev Routes through WETH: loser -> WETH -> winner
+    /// @param _loser Loser token address (token to swap from)
+    /// @param _winner Winner token address (token to swap to)
+    /// @param _loserAmount Amount of loser tokens to swap
+    /// @return The amount of winner tokens received
     function transferBattleRewards(
         address _loser,
         address _winner,
@@ -221,13 +233,11 @@ contract MemedEngageToEarn is Ownable, ReentrancyGuard {
             "Insufficient loser token balance"
         );
 
-        // Transfer loser tokens to factory for swap
         require(
             IERC20(_loser).transfer(address(factory), _loserAmount),
             "Transfer to factory failed"
         );
 
-        // Swap loser tokens to winner tokens (factory will route through WETH)
         address[] memory path = new address[](2);
         path[0] = _loser;
         path[1] = _winner;
@@ -242,11 +252,16 @@ contract MemedEngageToEarn is Ownable, ReentrancyGuard {
         return amountOut;
     }
 
+    /// @notice Set the factory contract address (one-time initialization)
+    /// @param _factory The factory contract address
     function setFactory(address _factory) external onlyOwner {
         require(address(factory) == address(0), "Already set");
         factory = IMemedFactory(_factory);
     }
 
+    /// @notice Check if a token is eligible for engagement rewards
+    /// @param _token The token address
+    /// @return Whether the token can receive rewards
     function isRewardable(address _token) external view returns (bool) {
         uint256 totalNFTs = IMemedWarriorNFT(factory.getWarriorNFT(_token))
             .currentTokenId();
@@ -272,6 +287,8 @@ contract MemedEngageToEarn is Ownable, ReentrancyGuard {
         return true;
     }
 
+    /// @notice Unlock creator incentives for a token
+    /// @param _token The token address
     function unlockCreatorIncentives(address _token) external {
         require(
             msg.sender == address(factory),
@@ -299,6 +316,8 @@ contract MemedEngageToEarn is Ownable, ReentrancyGuard {
         emit CreatorIncentivesUnlocked(unlockAmount);
     }
 
+    /// @notice Claim unlocked creator incentives
+    /// @param _token The token address
     function claimCreatorIncentives(address _token) external {
         require(
             msg.sender == creatorData[_token].creator,
@@ -311,6 +330,9 @@ contract MemedEngageToEarn is Ownable, ReentrancyGuard {
         emit CreatorIncentivesClaimed(amount);
     }
 
+    /// @notice Check if creator incentives can be unlocked for a token
+    /// @param _token The token address
+    /// @return Whether creator incentives can be unlocked
     function isCreatorRewardable(address _token) external view returns (bool) {
         uint256 amountClaimed = dayData[_token].claimedByCreator;
         if (block.timestamp > dayData[_token].creatorTimestamp + 1 days) {
@@ -320,6 +342,9 @@ contract MemedEngageToEarn is Ownable, ReentrancyGuard {
         return amount >= CREATOR_ALLOCATION_PER_UNLOCK;
     }
 
+    /// @notice Claim unclaimed tokens and set creator
+    /// @param _token The token address
+    /// @param to The creator address
     function claimUnclaimedTokens(address _token, address to) external {
         require(to != address(0), "Invalid address");
         require(

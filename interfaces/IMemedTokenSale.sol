@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: MIT
+
 pragma solidity ^0.8.28;
 
 import "../structs/TokenSaleStructs.sol";
 
+/// @title IMemedTokenSale
+/// @notice Interface for the Memed Token Sale contract
 interface IMemedTokenSale {
     function LP_ETH() external view returns (uint256);
     function startFairLaunch(address _creator) external returns (uint256, uint256);

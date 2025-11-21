@@ -1,12 +1,16 @@
 // SPDX-License-Identifier: MIT
+
 pragma solidity ^0.8.28;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
 import "../interfaces/IMemedFactory.sol";
 import "../structs/TokenSaleStructs.sol";
 
+/// @title Memed Token Sale
+/// @notice Manages fair launch token sales
 contract MemedTokenSale is Ownable, ReentrancyGuard {
     uint256 public constant DECIMALS = 1e18;
     uint256 public constant TOTAL_FOR_SALE = 150_000_000 * DECIMALS;
@@ -39,11 +43,16 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
 
     receive() external payable {}
 
+    /// @notice Set the factory contract address (one-time initialization)
+    /// @param _f The factory contract address
     function setFactory(address _f) external onlyOwner {
         require(address(memedFactory) == address(0), "set");
         memedFactory = IMemedFactory(_f);
     }
 
+    /// @notice Start a new fair launch
+    /// @param _creator The creator address (address(0) for unclaimed)
+    /// @return The fair launch ID and end time
     function startFairLaunch(address _creator) external onlyFactory returns (uint256, uint256) {
         if (_creator != address(0)) {
             require(isMintable(_creator), "blocked or exists");
@@ -59,6 +68,8 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
         return (id, endTime);
     }
 
+    /// @notice Commit ETH to a fair launch
+    /// @param _id The fair launch ID
     function commitToFairLaunch(uint256 _id) external payable nonReentrant {
         FairLaunchData storage f = fairLaunchData[_id];
         require(f.status == FairLaunchStatus.ACTIVE, "inactive");
@@ -72,6 +83,8 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
         emit CommitmentMade(_id, msg.sender, msg.value, 0);
     }
 
+    /// @notice Cancel a commitment and get refund (only during active phase)
+    /// @param _id The fair launch ID
     function cancelCommit(uint256 _id) external nonReentrant {
         FairLaunchData storage f = fairLaunchData[_id];
         require(f.status == FairLaunchStatus.ACTIVE, "state");
@@ -86,6 +99,8 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
         emit CommitmentCancelled(_id, msg.sender, amt, 0);
     }
 
+    /// @notice Finalize the sale and distribute ETH
+    /// @param _id The fair launch ID
     function finalizeSale(uint256 _id) external nonReentrant onlyFactory {
         FairLaunchData storage f = fairLaunchData[_id];
         require(f.status == FairLaunchStatus.ACTIVE, "state");
@@ -102,6 +117,10 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
         require(ok2, "xfer");
     }
 
+    /// @notice Mark the fair launch as completed
+    /// @param _id The fair launch ID
+    /// @param _token The deployed token address
+    /// @param _pair The Uniswap pair address
     function completeFairLaunch(uint256 _id, address _token, address _pair) external onlyFactory {
         FairLaunchData storage f = fairLaunchData[_id];
         f.status = FairLaunchStatus.COMPLETED;
@@ -110,6 +129,8 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
         emit FairLaunchCompleted(_id, _token, _pair, f.totalCommitted);
     }
 
+    /// @notice Claim refund for a failed fair launch
+    /// @param _id The fair launch ID
     function refund(uint256 _id) external nonReentrant {
         FairLaunchData storage f = fairLaunchData[_id];
         require(isRefundable(_id), "no");
@@ -124,6 +145,8 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
         require(ok, "xfer");
     }
 
+    /// @notice Claim tokens from a completed fair launch
+    /// @param _id The fair launch ID
     function claim(uint256 _id) external nonReentrant {
         FairLaunchData storage f = fairLaunchData[_id];
         require(f.status == FairLaunchStatus.COMPLETED, "incomplete");
@@ -155,15 +178,25 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
         emit Claimed(_id, msg.sender, userTokens, refundAmount);
     }
 
+    /// @notice Get the status of a fair launch
+    /// @param _id The fair launch ID
+    /// @return The fair launch status
     function getFairLaunchStatus(uint256 _id) public view returns (FairLaunchStatus) {
         FairLaunchData storage f = fairLaunchData[_id];
         return f.status;
     }
 
+    /// @notice Get a user's commitment details
+    /// @param _id The fair launch ID
+    /// @param u The user address
+    /// @return The commitment struct
     function getUserCommitment(uint256 _id, address u) external view returns (Commitment memory) {
         return fairLaunchData[_id].commitments[u];
     }
 
+    /// @notice Check if a fair launch is refundable
+    /// @param _id The fair launch ID
+    /// @return Whether refunds are available
     function isRefundable(uint256 _id) public view returns (bool) {
         FairLaunchData storage f = fairLaunchData[_id];
         return
@@ -172,6 +205,9 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
             f.totalCommitted < RAISE_ETH;
     }
 
+    /// @notice Check if a fair launch can be completed
+    /// @param _id The fair launch ID
+    /// @return Whether the fair launch can be completed
     function isCompletable(uint256 _id) public view returns (bool) {
         FairLaunchData storage f = fairLaunchData[_id];
         return
@@ -180,12 +216,18 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
             f.totalCommitted >= RAISE_ETH;
     }
 
+    /// @notice Check if a token's fair launch is active
+    /// @param _t The token address
+    /// @return Whether the fair launch is active
     function getFairLaunchActive(address _t) public view returns (bool) {
         uint256 tid = tokenIdByAddress[_t];
         if (tid == 0) return false;
         return fairLaunchData[tid].status == FairLaunchStatus.ACTIVE;
     }
 
+    /// @dev Check if a creator has an existing token
+    /// @param _c The creator address
+    /// @return Whether the creator has a token
     function _tokenExists(address _c) internal view returns (bool) {
         uint256[] memory ids = tokenIdsByCreator[_c];
         for (uint i = 0; i < ids.length; i++) {
@@ -198,11 +240,18 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
         return false;
     }
 
+    /// @notice Check if a creator is blocked from creating tokens
+    /// @param _c The creator address
+    /// @return blocked Whether the creator is blocked
+    /// @return endTime The timestamp when the block ends
     function isCreatorBlocked(address _c) public view returns (bool, uint256) {
         uint256 e = blockedCreators[_c];
         return (block.timestamp < e, e);
     }
 
+    /// @notice Check if a creator can mint a new token
+    /// @param _c The creator address
+    /// @return Whether the creator can mint
     function isMintable(address _c) public view returns (bool) {
         (bool b, ) = isCreatorBlocked(_c);
         return !_tokenExists(_c) && !b;

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+
 pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -14,6 +15,8 @@ import "../structs/FactoryStructs.sol";
 import "../libraries/TickMath.sol";
 import "../libraries/FullMath.sol";
 
+/// @title Memed Factory Test
+/// @notice Test contract for Memed Factory
 contract MemedFactory_test is Ownable, ReentrancyGuard {
     address public constant MEMED_TEST_ETH =
         0xc190e6F26cE14e40D30251fDe25927A73a5D58b6;

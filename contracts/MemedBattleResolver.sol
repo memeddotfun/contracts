@@ -1,19 +1,22 @@
 // SPDX-License-Identifier: MIT
+
 pragma solidity ^0.8.28;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
 import "../interfaces/IMemedWarriorNFT.sol";
 import "../interfaces/IMemedEngageToEarn.sol";
 import "../interfaces/IMemedFactory.sol";
 import "../interfaces/IMemedBattle.sol";
 import "../structs/FactoryStructs.sol";
 
-/// @title MemedBattleResolver Contract
+/// @title Memed Battle Resolver
+/// @notice Resolves battles and calculates winner based on engagement and value
 contract MemedBattleResolver is Ownable {
-    uint256 public constant ENGAGEMENT_WEIGHT = 60; // 60% engagement, 40% value
+    uint256 public constant ENGAGEMENT_WEIGHT = 60;
     uint256 public constant VALUE_WEIGHT = 40;
-    uint256 public constant BATTLE_REWARD_PERCENTAGE = 5; // 5% of engagement rewards pool per cycle
+    uint256 public constant BATTLE_REWARD_PERCENTAGE = 5;
 
     IMemedBattle public immutable battleContract;
     uint256[] public battleIdsToResolve;
@@ -22,6 +25,8 @@ contract MemedBattleResolver is Ownable {
         battleContract = IMemedBattle(_battle);
     }
 
+    /// @notice Add a battle ID to the resolution queue
+    /// @param _battleId The battle ID to add
     function addBattleIdsToResolve(uint256 _battleId) external {
         require(
             msg.sender == address(battleContract),
@@ -30,6 +35,8 @@ contract MemedBattleResolver is Ownable {
         battleIdsToResolve.push(_battleId);
     }
 
+    /// @notice Resolve a battle by calculating scores and distributing rewards
+    /// @param _battleId The battle ID to resolve
     function resolveBattle(uint256 _battleId) external {
         Battle memory battle = battleContract.getBattle(_battleId);
         require(
@@ -42,14 +49,12 @@ contract MemedBattleResolver is Ownable {
 
         IMemedFactory factory = IMemedFactory(battleContract.getFactory());
 
-        // Validate warrior NFTs exist
         require(
             factory.getWarriorNFT(battle.memeA) != address(0) &&
                 factory.getWarriorNFT(battle.memeB) != address(0),
             "Warrior NFTs not deployed"
         );
 
-        // Calculate final scores
         uint256 finalScoreA = _calculateScore(
             factory,
             battle.memeA,
@@ -76,14 +81,12 @@ contract MemedBattleResolver is Ownable {
             ? battle.memeB
             : battle.memeA;
 
-        // Get battle rewards
         uint256 totalReward = _processBattleRewards(
             factory,
             actualLoser,
             actualWinner
         );
 
-        // Update heat for winner
         HeatUpdate[] memory heatUpdates = new HeatUpdate[](1);
         heatUpdates[0] = HeatUpdate(actualWinner, 20000);
         factory.updateHeat(heatUpdates);
@@ -93,6 +96,12 @@ contract MemedBattleResolver is Ownable {
         _battleIdResolved(_battleId);
     }
 
+    /// @dev Calculate battle score based on heat and NFT value
+    /// @param factory The factory contract
+    /// @param token The token address
+    /// @param initialHeat The initial heat score at battle start
+    /// @param nftsAllocated The number of NFTs allocated
+    /// @return The calculated score
     function _calculateScore(
         IMemedFactory factory,
         address token,
@@ -116,6 +125,11 @@ contract MemedBattleResolver is Ownable {
             (heatScore * ENGAGEMENT_WEIGHT + valueScore * VALUE_WEIGHT) / totalWeight;
     }
 
+    /// @dev Process battle rewards by swapping loser tokens to winner tokens
+    /// @param factory The factory contract
+    /// @param loser The losing token address
+    /// @param winner The winning token address
+    /// @return The amount of winner tokens received
     function _processBattleRewards(
         IMemedFactory factory,
         address loser,
@@ -137,6 +151,8 @@ contract MemedBattleResolver is Ownable {
         return 0;
     }
 
+    /// @dev Remove a battle ID from the resolution queue
+    /// @param _battleId The battle ID to remove
     function _battleIdResolved(uint256 _battleId) internal {
         for (uint256 i = 0; i < battleIdsToResolve.length; i++) {
             if (battleIdsToResolve[i] == _battleId) {
@@ -149,10 +165,11 @@ contract MemedBattleResolver is Ownable {
         }
     }
 
+    /// @notice Get all battle IDs that are ready to be resolved
+    /// @return Array of battle IDs ready for resolution
     function getBattleIdsToResolve() external view returns (uint256[] memory) {
         uint256 count = 0;
 
-        // Count eligible battles
         for (uint256 i = 0; i < battleIdsToResolve.length; i++) {
             Battle memory battle = battleContract.getBattle(
                 battleIdsToResolve[i]
@@ -165,7 +182,6 @@ contract MemedBattleResolver is Ownable {
             }
         }
 
-        // Build result array
         uint256[] memory _battleIdsToResolve = new uint256[](count);
         uint256 index = 0;
         for (uint256 i = 0; i < battleIdsToResolve.length; i++) {

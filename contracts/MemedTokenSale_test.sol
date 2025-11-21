@@ -1,12 +1,16 @@
 // SPDX-License-Identifier: MIT
+
 pragma solidity ^0.8.28;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+
 import "../interfaces/IMemedFactory.sol";
 import "../structs/TokenSaleStructs.sol";
 
+/// @title Memed Token Sale Test
+/// @notice Test contract for Memed Token Sale
 contract MemedTokenSale_test is Ownable, ReentrancyGuard {
     address public constant MEMED_TEST_ETH = 0xc190e6F26cE14e40D30251fDe25927A73a5D58b6;
     uint256 public constant DECIMALS = 1e18;

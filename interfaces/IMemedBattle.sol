@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: MIT
+
 pragma solidity ^0.8.28;
 
 import "../structs/BattleStructs.sol";
 
+/// @title IMemedBattle
+/// @notice Interface for the Memed Battle contract
 interface IMemedBattle {
     function tokenBattleAllocations(
         address _token
