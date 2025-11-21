@@ -109,6 +109,7 @@ contract MemedFactory_test is Ownable, ReentrancyGuard {
             memedTokenSale.tokenIdByAddress(_token)
         ];
         require(t.creator == _creator, "creator mismatch");
+        require(t.token != address(0), "Token not created");
         require(!t.isClaimedByCreator, "already claimed");
         require(
             !memedTokenSale.isMintable(_creator),

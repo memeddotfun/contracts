@@ -109,6 +109,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         TokenData storage token = tokenData[
             memedTokenSale.tokenIdByAddress(_token)
         ];
+        require(token.token != address(0), "Token not created");
         require(token.creator == _creator, "Creator mismatch");
         require(!token.isClaimedByCreator, "Already claimed by creator");
         require(
@@ -116,7 +117,6 @@ contract MemedFactory is Ownable, ReentrancyGuard {
             "Creator already has a token"
         );
         token.isClaimedByCreator = true;
-        // Reset lastRewardAt to current heat when creator claims
         TokenRewardData storage rewardData = tokenRewardData[
             memedTokenSale.tokenIdByAddress(_token)
         ];
