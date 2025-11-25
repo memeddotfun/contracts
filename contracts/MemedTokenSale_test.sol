@@ -241,20 +241,16 @@ contract MemedTokenSale_test is Ownable, ReentrancyGuard {
         FairLaunchData storage f = fairLaunchData[_id];
         require(commitAmount > 0, "zero amount");
         
-        // Simulate what totalCommitted would be after this commitment
         uint256 projectedTotal = f.totalCommitted + commitAmount;
         
         if (projectedTotal >= RAISE_ETH) {
-            // If we reach or exceed the raise goal, tokens are distributed proportionally
             tokens = (commitAmount * TOTAL_FOR_SALE) / projectedTotal;
             
-            // Calculate refund if oversubscribed
             if (projectedTotal > RAISE_ETH) {
                 uint256 ethUsed = (commitAmount * RAISE_ETH) / projectedTotal;
                 refundAmount = commitAmount - ethUsed;
             }
         } else {
-            // If below raise goal, tokens are at fixed price
             tokens = (commitAmount * DECIMALS) / PRICE_PER_TOKEN_WEI;
             refundAmount = 0;
         }
