@@ -160,17 +160,32 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
             userTokens = (c.amount * DECIMALS) / PRICE_PER_TOKEN_WEI;
         }
 
-        c.claimed = true;
-        c.tokenAmount = userTokens;
-        f.balance[msg.sender] = userTokens;
-
-        IERC20(memedFactory.getTokenById(_id).token).transfer(msg.sender, userTokens);
+        address tokenAddress = memedFactory.getTokenById(_id).token;
+        uint256 tokenBalance = IERC20(tokenAddress).balanceOf(address(this));
+        if (userTokens > tokenBalance) {
+            userTokens = tokenBalance;
+        }
 
         uint256 refundAmount = 0;
         if (f.totalCommitted > RAISE_ETH && !c.refunded) {
             uint256 ethUsed = (c.amount * RAISE_ETH) / f.totalCommitted;
             refundAmount = c.amount - ethUsed;
+            uint256 contractBalance = address(this).balance;
+            if (refundAmount > contractBalance) {
+                refundAmount = contractBalance;
+            }
+        }
+
+        c.claimed = true;
+        c.tokenAmount = userTokens;
+        f.balance[msg.sender] = userTokens;
+        if (refundAmount > 0) {
             c.refunded = true;
+        }
+
+        IERC20(tokenAddress).transfer(msg.sender, userTokens);
+
+        if (refundAmount > 0) {
             (bool ok, ) = payable(msg.sender).call{value: refundAmount}("");
             require(ok, "xfer");
         }
