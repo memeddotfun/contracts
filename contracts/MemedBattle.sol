@@ -107,8 +107,6 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         b.battleId = battleCount;
         b.memeA = tokenA.token;
         b.memeB = tokenB.token;
-        b.heatA = factory.getHeat(tokenA.token);
-        b.heatB = factory.getHeat(tokenB.token);
         battleIds[tokenA.token].push(battleCount);
         battleIds[tokenB.token].push(battleCount);
         if (!tokenB.isClaimedByCreator) {
@@ -156,6 +154,8 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         battleCooldowns[battle.memeB].cooldownEndTime =
             block.timestamp +
             BATTLE_COOLDOWN;
+        battle.heatA = factory.getHeat(battle.memeA);
+        battle.heatB = factory.getHeat(battle.memeB);
         battleResolver.addBattleIdsToResolve(_battleId);
         emit BattleStarted(_battleId, battle.memeA, battle.memeB);
     }
@@ -581,5 +581,21 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         address _user
     ) external view returns (uint256[] memory) {
         return tokenAllocations[_user];
+    }
+
+    /// @notice Get current heat information for tokens in a battle
+    /// @param _battleId The battle ID
+    /// @return heatA Current heat of token A
+    /// @return heatB Current heat of token B
+    function getBattleHeat(
+        uint256 _battleId
+    ) external view returns (uint256 heatA, uint256 heatB) {
+        Battle storage battle = battles[_battleId];
+        require(battle.memeA != address(0), "Invalid battle");
+        
+        heatA = factory.getHeat(battle.memeA) - battle.heatA;
+        heatB = factory.getHeat(battle.memeB) - battle.heatB;
+        
+        return (heatA, heatB);
     }
 }
