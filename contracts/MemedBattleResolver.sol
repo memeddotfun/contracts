@@ -14,8 +14,6 @@ import "../structs/FactoryStructs.sol";
 /// @title Memed Battle Resolver
 /// @notice Resolves battles and calculates winner based on engagement and value
 contract MemedBattleResolver is Ownable {
-    uint256 public constant ENGAGEMENT_WEIGHT = 60;
-    uint256 public constant VALUE_WEIGHT = 40;
     uint256 public constant BATTLE_REWARD_PERCENTAGE = 5;
 
     IMemedBattle public immutable battleContract;
@@ -55,18 +53,7 @@ contract MemedBattleResolver is Ownable {
             "Warrior NFTs not deployed"
         );
 
-        uint256 finalScoreA = _calculateScore(
-            factory,
-            battle.memeA,
-            battle.heatA,
-            battle.memeANftsAllocated
-        );
-        uint256 finalScoreB = _calculateScore(
-            factory,
-            battle.memeB,
-            battle.heatB,
-            battle.memeBNftsAllocated
-        );
+        (uint256 finalScoreA, uint256 finalScoreB, , , , ) = battleContract.getBattleScore(_battleId);
 
         if (finalScoreA == finalScoreB) {
             battleContract.resolveBattle(_battleId, address(0), 0);
@@ -94,35 +81,6 @@ contract MemedBattleResolver is Ownable {
 
         battleContract.resolveBattle(_battleId, actualWinner, totalReward);
         _battleIdResolved(_battleId);
-    }
-
-    /// @dev Calculate battle score based on heat and NFT value
-    /// @param factory The factory contract
-    /// @param token The token address
-    /// @param initialHeat The initial heat score at battle start
-    /// @param nftsAllocated The number of NFTs allocated
-    /// @return The calculated score
-    function _calculateScore(
-        IMemedFactory factory,
-        address token,
-        uint256 initialHeat,
-        uint256 nftsAllocated
-    ) internal view returns (uint256) {
-        uint256 currentHeat = factory.getHeat(token);
-        require(currentHeat >= initialHeat, "Invalid heat calculation");
-        
-        uint256 heatScore = currentHeat - initialHeat;
-        uint256 currentPrice = IMemedWarriorNFT(factory.getWarriorNFT(token))
-            .getCurrentPrice();
-        uint256 valueScore = currentPrice * nftsAllocated;
-        
-        uint256 totalWeight = ENGAGEMENT_WEIGHT + VALUE_WEIGHT;
-        if (totalWeight == 0) {
-            return 0;
-        }
-        
-        return
-            (heatScore * ENGAGEMENT_WEIGHT + valueScore * VALUE_WEIGHT) / totalWeight;
     }
 
     /// @dev Process battle rewards by swapping loser tokens to winner tokens

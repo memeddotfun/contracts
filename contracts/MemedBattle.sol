@@ -19,6 +19,8 @@ contract MemedBattle is Ownable, ReentrancyGuard {
     IMemedBattleResolver public battleResolver;
     IMemedFactory public factory;
     uint256 public constant BATTLE_COOLDOWN = 20 minutes;
+    uint256 public constant ENGAGEMENT_WEIGHT = 60;
+    uint256 public constant VALUE_WEIGHT = 40;
 
     mapping(address => BattleCooldown) public battleCooldowns;
     uint256 public constant BATTLE_DURATION = 20 minutes;
@@ -593,7 +595,7 @@ contract MemedBattle is Ownable, ReentrancyGuard {
     /// @return valueScoreB Value score for token B (price * NFTs)
     function getBattleScore(
         uint256 _battleId
-    ) external view returns (
+    ) public view returns (
         uint256 scoreA,
         uint256 scoreB,
         uint256 heatScoreA,
@@ -603,9 +605,6 @@ contract MemedBattle is Ownable, ReentrancyGuard {
     ) {
         Battle storage battle = battles[_battleId];
         require(battle.memeA != address(0), "Invalid battle");
-        
-        uint256 ENGAGEMENT_WEIGHT = 60;
-        uint256 VALUE_WEIGHT = 40;
         
         // Calculate heat scores (current heat - initial heat)
         uint256 currentHeatA = factory.getHeat(battle.memeA);
