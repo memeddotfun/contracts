@@ -583,19 +583,54 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         return tokenAllocations[_user];
     }
 
-    /// @notice Get current heat information for tokens in a battle
+    /// @notice Get battle scores calculated same way as resolver
     /// @param _battleId The battle ID
-    /// @return heatA Current heat of token A
-    /// @return heatB Current heat of token B
-    function getBattleHeat(
+    /// @return scoreA Final score for token A (60% heat + 40% value)
+    /// @return scoreB Final score for token B (60% heat + 40% value)
+    /// @return heatScoreA Heat gain for token A
+    /// @return heatScoreB Heat gain for token B
+    /// @return valueScoreA Value score for token A (price * NFTs)
+    /// @return valueScoreB Value score for token B (price * NFTs)
+    function getBattleScore(
         uint256 _battleId
-    ) external view returns (uint256 heatA, uint256 heatB) {
+    ) external view returns (
+        uint256 scoreA,
+        uint256 scoreB,
+        uint256 heatScoreA,
+        uint256 heatScoreB,
+        uint256 valueScoreA,
+        uint256 valueScoreB
+    ) {
         Battle storage battle = battles[_battleId];
         require(battle.memeA != address(0), "Invalid battle");
         
-        heatA = factory.getHeat(battle.memeA) - battle.heatA;
-        heatB = factory.getHeat(battle.memeB) - battle.heatB;
+        uint256 ENGAGEMENT_WEIGHT = 60;
+        uint256 VALUE_WEIGHT = 40;
         
-        return (heatA, heatB);
+        // Calculate heat scores (current heat - initial heat)
+        uint256 currentHeatA = factory.getHeat(battle.memeA);
+        uint256 currentHeatB = factory.getHeat(battle.memeB);
+        heatScoreA = currentHeatA >= battle.heatA ? currentHeatA - battle.heatA : 0;
+        heatScoreB = currentHeatB >= battle.heatB ? currentHeatB - battle.heatB : 0;
+        
+        // Calculate value scores (current price * NFTs allocated)
+        address nftA = factory.getWarriorNFT(battle.memeA);
+        address nftB = factory.getWarriorNFT(battle.memeB);
+        
+        if (nftA != address(0)) {
+            uint256 priceA = IMemedWarriorNFT(nftA).getCurrentPrice();
+            valueScoreA = priceA * battle.memeANftsAllocated;
+        }
+        
+        if (nftB != address(0)) {
+            uint256 priceB = IMemedWarriorNFT(nftB).getCurrentPrice();
+            valueScoreB = priceB * battle.memeBNftsAllocated;
+        }
+        
+        // Calculate final scores (60% heat + 40% value)
+        scoreA = (heatScoreA * ENGAGEMENT_WEIGHT + valueScoreA * VALUE_WEIGHT) / 100;
+        scoreB = (heatScoreB * ENGAGEMENT_WEIGHT + valueScoreB * VALUE_WEIGHT) / 100;
+        
+        return (scoreA, scoreB, heatScoreA, heatScoreB, valueScoreA, valueScoreB);
     }
 }

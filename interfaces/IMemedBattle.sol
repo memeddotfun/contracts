@@ -40,7 +40,14 @@ interface IMemedBattle {
         address _token,
         uint256 _nftId
     ) external view returns (uint256, bool);
-    function getBattleHeat(
+    function getBattleScore(
         uint256 _battleId
-    ) external view returns (uint256 heatA, uint256 heatB);
+    ) external view returns (
+        uint256 scoreA,
+        uint256 scoreB,
+        uint256 heatScoreA,
+        uint256 heatScoreB,
+        uint256 valueScoreA,
+        uint256 valueScoreB
+    );
 }
