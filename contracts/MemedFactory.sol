@@ -39,9 +39,9 @@ contract MemedFactory is Ownable, ReentrancyGuard {
     mapping(uint256 => TokenRewardData) public tokenRewardData;
     mapping(address => uint256) public lpTokenIds;
     address[] public tokens;
-    INonfungiblePositionManager public positionManager;
-    IUniswapV3Factory public uniswapV3Factory;
-    ISwapRouter public swapRouter;
+    INonfungiblePositionManager public immutable positionManager;
+    IUniswapV3Factory public immutable uniswapV3Factory;
+    ISwapRouter public immutable swapRouter;
     uint24 public constant POOL_FEE = 3000;
     event TokenCreated(
         uint256 indexed id,
@@ -70,15 +70,16 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         address _memedTokenSale,
         address _memedBattle,
         address _memedEngageToEarn,
-        address _positionManager,
         address _swapRouter
     ) Ownable(msg.sender) {
         memedTokenSale = IMemedTokenSale(_memedTokenSale);
         memedBattle = IMemedBattle(_memedBattle);
         memedEngageToEarn = IMemedEngageToEarn(_memedEngageToEarn);
-        positionManager = INonfungiblePositionManager(_positionManager);
         swapRouter = ISwapRouter(_swapRouter);
-        uniswapV3Factory = IUniswapV3Factory(positionManager.factory());
+        uniswapV3Factory = IUniswapV3Factory(swapRouter.factory());
+        positionManager = INonfungiblePositionManager(
+            swapRouter.positionManager()
+        );
         WETH = swapRouter.WETH9();
     }
 
@@ -91,7 +92,9 @@ contract MemedFactory is Ownable, ReentrancyGuard {
                 "Creator is blocked or already has a token"
             );
         }
-        (uint256 id, uint256 endTime) = memedTokenSale.startFairLaunch(_creator);
+        (uint256 id, uint256 endTime) = memedTokenSale.startFairLaunch(
+            _creator
+        );
         TokenData storage token = tokenData[id];
         token.creator = _creator;
         token.isClaimedByCreator = _creator != address(0);
@@ -238,10 +241,12 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         TokenRewardData storage tokenLoser = tokenRewardData[
             memedTokenSale.tokenIdByAddress(_loser)
         ];
+
         token.creatorIncentivesUnlocksAt =
             token.creatorIncentivesUnlocksAt -
             ((token.creatorIncentivesUnlocksAt * BATTLE_REWARDS_PERCENTAGE) /
                 100);
+
         tokenLoser.creatorIncentivesUnlocksAt =
             tokenLoser.creatorIncentivesUnlocksAt +
             ((tokenLoser.creatorIncentivesUnlocksAt *

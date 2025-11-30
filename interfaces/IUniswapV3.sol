@@ -54,8 +54,6 @@ interface INonfungiblePositionManager {
     function collect(
         CollectParams calldata params
     ) external payable returns (uint256 amount0, uint256 amount1);
-
-    function factory() external view returns (address);
 }
 
 interface ISwapRouter {
@@ -68,6 +66,8 @@ interface ISwapRouter {
     function exactInput(
         ExactInputParams calldata params
     ) external payable returns (uint256 amountOut);
+    function factory() external view returns (address);
+    function positionManager() external view returns (address);
     function WETH9() external view returns (address);
 }
 

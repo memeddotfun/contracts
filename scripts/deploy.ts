@@ -11,7 +11,6 @@ import tokenSaleModule from "../ignition/modules/TokenSale.js";
 async function main() {
   const { ignition } = await hre.network.connect();
   
-  const uniswapV3PositionManager = "0x27F971cb582BF9E50F397e4d29a5C7A34f11faA2";
   const uniswapV3SwapRouter = "0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4";
   const kmsAddress = "0xA9225Bd06a7c10AcB4e4833b7fed51c3Cd696103";
   const { battle } = await ignition.deploy(battleModule);
@@ -38,7 +37,6 @@ async function main() {
         memedTokenSale: memedTokenSaleAddress,
         memedBattle: memedBattleAddress,
         memedEngageToEarn: memedEngageToEarnAddress,
-        uniswapV3PositionManager: uniswapV3PositionManager,
         uniswapV3SwapRouter: uniswapV3SwapRouter,
       },
     },
