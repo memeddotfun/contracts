@@ -68,6 +68,7 @@ interface ISwapRouter {
     function exactInput(
         ExactInputParams calldata params
     ) external payable returns (uint256 amountOut);
+    function WETH9() external view returns (address);
 }
 
 interface IUniswapV3Pool {

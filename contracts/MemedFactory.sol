@@ -23,7 +23,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
     uint256 public constant MAX_ENGAGE_USER_REWARD_PERCENTAGE = 2;
     uint256 public constant MAX_ENGAGE_CREATOR_REWARD_PERCENTAGE = 1;
 
-    address public constant WETH = 0x4200000000000000000000000000000000000006;
+    address public immutable WETH;
 
     uint256 public INITIAL_REWARDS_PER_HEAT = 100000;
     uint256 public BATTLE_REWARDS_PERCENTAGE = 20;
@@ -79,6 +79,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         positionManager = INonfungiblePositionManager(_positionManager);
         swapRouter = ISwapRouter(_swapRouter);
         uniswapV3Factory = IUniswapV3Factory(positionManager.factory());
+        WETH = swapRouter.WETH9();
     }
 
     /// @notice Start a new fair launch for a token
