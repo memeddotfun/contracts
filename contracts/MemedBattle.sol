@@ -591,8 +591,8 @@ contract MemedBattle is Ownable, ReentrancyGuard {
     /// @return scoreB Final score for token B (60% heat + 40% value)
     /// @return heatScoreA Heat gain for token A
     /// @return heatScoreB Heat gain for token B
-    /// @return valueScoreA Value score for token A (price * NFTs)
-    /// @return valueScoreB Value score for token B (price * NFTs)
+    /// @return valueScoreA Value score for token A (normalized)
+    /// @return valueScoreB Value score for token B (normalized)
     function getBattleScore(
         uint256 _battleId
     ) public view returns (
@@ -612,18 +612,18 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         heatScoreA = currentHeatA >= battle.heatA ? currentHeatA - battle.heatA : 0;
         heatScoreB = currentHeatB >= battle.heatB ? currentHeatB - battle.heatB : 0;
         
-        // Calculate value scores (current price * NFTs allocated)
+        // Calculate value scores (price * NFTs, normalized from wei)
         address nftA = factory.getWarriorNFT(battle.memeA);
         address nftB = factory.getWarriorNFT(battle.memeB);
         
         if (nftA != address(0)) {
             uint256 priceA = IMemedWarriorNFT(nftA).getCurrentPrice();
-            valueScoreA = priceA * battle.memeANftsAllocated;
+            valueScoreA = (priceA * battle.memeANftsAllocated) / 1e18;
         }
         
         if (nftB != address(0)) {
             uint256 priceB = IMemedWarriorNFT(nftB).getCurrentPrice();
-            valueScoreB = priceB * battle.memeBNftsAllocated;
+            valueScoreB = (priceB * battle.memeBNftsAllocated) / 1e18;
         }
         
         // Calculate final scores (60% heat + 40% value)
