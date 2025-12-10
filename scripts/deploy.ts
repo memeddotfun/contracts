@@ -66,6 +66,8 @@ async function main() {
   // Set owner of all contracts to the KMS address
   console.log("Transferring ownership of all contracts to the KMS address...");
   await battle.write.transferOwnership([kmsAddress]);
+  console.log("Transferring ownership of MemedBattleResolver to the KMS address...");
+  await battleResolver.write.transferOwnership([kmsAddress]);
   console.log("Transferring ownership of MemedEngageToEarn to the KMS address...");
   await engageToEarn.write.transferOwnership([kmsAddress]);
   console.log("Transferring ownership of MemedTokenSale to the KMS address...");
