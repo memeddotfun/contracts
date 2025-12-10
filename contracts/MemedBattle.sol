@@ -606,24 +606,24 @@ contract MemedBattle is Ownable, ReentrancyGuard {
         Battle storage battle = battles[_battleId];
         require(battle.memeA != address(0), "Invalid battle");
         
-        // Calculate heat scores (current heat - initial heat)
+        // Calculate heat scores (current heat - initial heat, 500 heat = 1 score point)
         uint256 currentHeatA = factory.getHeat(battle.memeA);
         uint256 currentHeatB = factory.getHeat(battle.memeB);
-        heatScoreA = currentHeatA >= battle.heatA ? currentHeatA - battle.heatA : 0;
-        heatScoreB = currentHeatB >= battle.heatB ? currentHeatB - battle.heatB : 0;
+        heatScoreA = currentHeatA >= battle.heatA ? (currentHeatA - battle.heatA) / 500 : 0;
+        heatScoreB = currentHeatB >= battle.heatB ? (currentHeatB - battle.heatB) / 500 : 0;
         
-        // Calculate value scores (price * NFTs, normalized from wei)
+        // Calculate value scores (price * NFTs, 500 MEME = 1 score point)
         address nftA = factory.getWarriorNFT(battle.memeA);
         address nftB = factory.getWarriorNFT(battle.memeB);
         
         if (nftA != address(0)) {
             uint256 priceA = IMemedWarriorNFT(nftA).getCurrentPrice();
-            valueScoreA = (priceA * battle.memeANftsAllocated) / 1e18;
+            valueScoreA = (priceA * battle.memeANftsAllocated) / 500e18;
         }
         
         if (nftB != address(0)) {
             uint256 priceB = IMemedWarriorNFT(nftB).getCurrentPrice();
-            valueScoreB = (priceB * battle.memeBNftsAllocated) / 1e18;
+            valueScoreB = (priceB * battle.memeBNftsAllocated) / 500e18;
         }
         
         // Calculate final scores (60% heat + 40% value)
