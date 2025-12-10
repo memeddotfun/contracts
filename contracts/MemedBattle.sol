@@ -18,12 +18,12 @@ import "../interfaces/IMemedBattleResolver.sol";
 contract MemedBattle is Ownable, ReentrancyGuard {
     IMemedBattleResolver public battleResolver;
     IMemedFactory public factory;
-    uint256 public constant BATTLE_COOLDOWN = 20 minutes;
+    uint256 public constant BATTLE_COOLDOWN = 2 weeks;
     uint256 public constant ENGAGEMENT_WEIGHT = 60;
     uint256 public constant VALUE_WEIGHT = 40;
 
     mapping(address => BattleCooldown) public battleCooldowns;
-    uint256 public constant BATTLE_DURATION = 20 minutes;
+    uint256 public constant BATTLE_DURATION = 1 weeks;
     uint256 public battleCount;
     mapping(uint256 => Battle) public battles;
     mapping(address => uint256[]) public battleIds;
