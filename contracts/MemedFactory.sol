@@ -168,10 +168,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
             );
 
             uint256 oldHeat = tokenReward.heat;
-            uint256 newHeat = _heatUpdates[i].heat;
-            require(newHeat >= oldHeat, "Invalid heat decrease");
-
-            tokenReward.heat = newHeat;
+            tokenReward.heat = oldHeat + _heatUpdates[i].heat;
             tokenReward.lastHeatUpdate = block.timestamp;
 
             if (

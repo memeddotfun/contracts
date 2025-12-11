@@ -225,10 +225,19 @@ contract MemedWarriorNFT is ERC721URIStorage, Ownable, ReentrancyGuard {
         uint256 _timestamp
     ) external view returns (uint256[] memory) {
         uint256[] memory nfts = userNFTs[_user];
-        uint256[] memory mintedBefore = new uint256[](nfts.length);
+        uint256 count = 0;
+        
         for (uint256 i = 0; i < nfts.length; i++) {
             if (warriors[nfts[i]].mintedAt < _timestamp) {
-                mintedBefore[i] = nfts[i];
+                count++;
+            }
+        }
+        
+        uint256[] memory mintedBefore = new uint256[](count);
+        uint256 index = 0;
+        for (uint256 i = 0; i < nfts.length; i++) {
+            if (warriors[nfts[i]].mintedAt < _timestamp) {
+                mintedBefore[index++] = nfts[i];
             }
         }
         return mintedBefore;
