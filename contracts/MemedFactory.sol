@@ -122,7 +122,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
         require(token.creator == _creator, "Creator mismatch");
         require(!token.isClaimedByCreator, "Already claimed by creator");
         require(
-            !memedTokenSale.isMintable(_creator),
+            memedTokenSale.isMintable(_creator),
             "Creator already has a token"
         );
         token.isClaimedByCreator = true;
