@@ -429,14 +429,12 @@ contract MemedBattle is Ownable, ReentrancyGuard {
     function getUserBattles(
         address _token
     ) external view returns (Battle[] memory) {
-        // First pass: count matching battles
         uint256 count = 0;
         for (uint256 i = 0; i <= battleCount; i++) {
             if (battles[i].memeA == _token || battles[i].memeB == _token) {
                 count++;
             }
         }
-        // Second pass: fill correctly-sized array
         Battle[] memory battlesArray = new Battle[](count);
         uint256 index = 0;
         for (uint256 i = 0; i <= battleCount; i++) {

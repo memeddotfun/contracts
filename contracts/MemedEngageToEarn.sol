@@ -174,7 +174,6 @@ contract MemedEngageToEarn is Ownable, ReentrancyGuard {
         view
         returns (EngagementRewardClaim[] memory)
     {
-        // First pass: count valid claims
         uint256 count = 0;
         for (uint256 i = 1; i <= engagementRewardId; i++) {
             if (isClaimedByUser[i][msg.sender]) continue;
@@ -197,7 +196,6 @@ contract MemedEngageToEarn is Ownable, ReentrancyGuard {
             if (amount > 0) count++;
         }
 
-        // Second pass: fill correctly-sized array
         EngagementRewardClaim[] memory engagementRewardsClaims = new EngagementRewardClaim[](count);
         uint256 index = 0;
         for (uint256 i = 1; i <= engagementRewardId; i++) {
@@ -263,7 +261,7 @@ contract MemedEngageToEarn is Ownable, ReentrancyGuard {
             _loserAmount,
             path,
             factory.getMemedBattle(),
-            1 // Minimum 1 token output for slippage protection
+            1
         );
 
         require(amountOut > 0, "Swap failed");
