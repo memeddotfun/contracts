@@ -4,6 +4,7 @@ pragma solidity ^0.8.28;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 import "../interfaces/IMemedWarriorNFT.sol";
 import "../interfaces/IMemedEngageToEarn.sol";
@@ -13,7 +14,7 @@ import "../structs/FactoryStructs.sol";
 
 /// @title Memed Battle Resolver
 /// @notice Resolves battles and calculates winner based on engagement and value
-contract MemedBattleResolver is Ownable {
+contract MemedBattleResolver is Ownable, ReentrancyGuard {
     uint256 public constant BATTLE_REWARD_PERCENTAGE = 5;
 
     IMemedBattle public immutable battleContract;
@@ -35,7 +36,7 @@ contract MemedBattleResolver is Ownable {
 
     /// @notice Resolve a battle by calculating scores and distributing rewards
     /// @param _battleId The battle ID to resolve
-    function resolveBattle(uint256 _battleId) external {
+    function resolveBattle(uint256 _battleId) external nonReentrant {
         Battle memory battle = battleContract.getBattle(_battleId);
         require(
             battle.memeA != address(0) && battle.memeB != address(0),

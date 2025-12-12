@@ -26,6 +26,7 @@ struct Battle {
     uint256 heatB;
     uint256 startTime;
     uint256 endTime;
+    uint256 challengeTime;
     BattleStatus status;
     address winner;
     uint256 totalReward;

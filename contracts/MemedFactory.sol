@@ -25,8 +25,8 @@ contract MemedFactory is Ownable, ReentrancyGuard {
 
     address public immutable WETH;
 
-    uint256 public INITIAL_REWARDS_PER_HEAT = 100000;
-    uint256 public BATTLE_REWARDS_PERCENTAGE = 20;
+    uint256 public constant INITIAL_REWARDS_PER_HEAT = 100000;
+    uint256 public constant BATTLE_REWARDS_PERCENTAGE = 20;
 
     uint256 public constant ENGAGEMENT_REWARDS_PER_NEW_HEAT = 100000;
     uint256 public constant CREATOR_INCENTIVE_STEP = 100000;
@@ -209,9 +209,10 @@ contract MemedFactory is Ownable, ReentrancyGuard {
                     for (uint256 k = 0; k < unlocksCount; k++) {
                         memedEngageToEarn.unlockCreatorIncentives(token.token);
                     }
+                    // Use fixed step for tracking to avoid desync when creatorIncentivesUnlocksAt changes
                     tokenReward.creatorIncentivesUnlockedAt +=
                         unlocksCount *
-                        tokenReward.creatorIncentivesUnlocksAt;
+                        CREATOR_INCENTIVE_STEP;
                 }
             }
 
@@ -239,10 +240,12 @@ contract MemedFactory is Ownable, ReentrancyGuard {
             memedTokenSale.tokenIdByAddress(_loser)
         ];
 
-        token.creatorIncentivesUnlocksAt =
-            token.creatorIncentivesUnlocksAt -
-            ((token.creatorIncentivesUnlocksAt * BATTLE_REWARDS_PERCENTAGE) /
-                100);
+        uint256 reduction = (token.creatorIncentivesUnlocksAt * BATTLE_REWARDS_PERCENTAGE) / 100;
+        if (token.creatorIncentivesUnlocksAt - reduction < CREATOR_INCENTIVE_STEP) {
+            token.creatorIncentivesUnlocksAt = CREATOR_INCENTIVE_STEP;
+        } else {
+            token.creatorIncentivesUnlocksAt = token.creatorIncentivesUnlocksAt - reduction;
+        }
 
         tokenLoser.creatorIncentivesUnlocksAt =
             tokenLoser.creatorIncentivesUnlocksAt +
@@ -422,8 +425,8 @@ contract MemedFactory is Ownable, ReentrancyGuard {
                 tickUpper: tickUpper,
                 amount0Desired: amount0Desired,
                 amount1Desired: amount1Desired,
-                amount0Min: 0,
-                amount1Min: 0,
+                amount0Min: (amount0Desired * 95) / 100,
+                amount1Min: (amount1Desired * 95) / 100,
                 recipient: address(this),
                 deadline: block.timestamp + 600
             })
@@ -435,11 +438,13 @@ contract MemedFactory is Ownable, ReentrancyGuard {
     /// @param _amount The amount of input tokens to swap
     /// @param _path The swap path (must route through WETH)
     /// @param _to The recipient address
+    /// @param _minAmountOut Minimum amount of output tokens (slippage protection)
     /// @return The amount of output tokens received
     function swap(
         uint256 _amount,
         address[] calldata _path,
-        address _to
+        address _to,
+        uint256 _minAmountOut
     ) external nonReentrant returns (uint256) {
         require(
             msg.sender == address(memedEngageToEarn),
@@ -477,7 +482,7 @@ contract MemedFactory is Ownable, ReentrancyGuard {
                 path: path,
                 recipient: _to,
                 amountIn: _amount,
-                amountOutMinimum: 0
+                amountOutMinimum: _minAmountOut
             });
 
         uint256 amountOut = swapRouter.exactInput(params);

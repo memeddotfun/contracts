@@ -47,6 +47,10 @@ contract MemedEngageToEarn is Ownable, ReentrancyGuard {
     event CreatorIncentivesUnlocked(uint256 amount);
     event CreatorIncentivesClaimed(uint256 amount);
     event CreatorSet(address to);
+    modifier onlyFactory() {
+        require(msg.sender == address(factory), "Only factory can call this function");
+        _;
+    }
 
     /// @notice Get engagement reward details by ID
     /// @param _rewardId The reward ID
@@ -171,23 +175,39 @@ contract MemedEngageToEarn is Ownable, ReentrancyGuard {
         view
         returns (EngagementRewardClaim[] memory)
     {
-        EngagementRewardClaim[]
-            memory engagementRewardsClaims = new EngagementRewardClaim[](
-                engagementRewardId
-            );
+        // First pass: count valid claims
+        uint256 count = 0;
+        for (uint256 i = 1; i <= engagementRewardId; i++) {
+            if (isClaimedByUser[i][msg.sender]) continue;
+            EngagementReward memory reward = engagementRewards[i];
+            if (reward.token == address(0)) continue;
+            
+            uint256 amount = 0;
+            uint256 availableReward = totalClaimed[reward.token] - reward.amountClaimed;
+            uint256[] memory nftIds = IMemedWarriorNFT(
+                factory.getWarriorNFT(reward.token)
+            ).getWarriorMintedBeforeByUser(msg.sender, reward.timestamp);
+
+            for (uint256 j = 0; j < nftIds.length; j++) {
+                (uint256 nftReward, ) = IMemedBattle(factory.getMemedBattle())
+                    .getNftRewardAndIsReturnable(reward.token, nftIds[j]);
+                if (availableReward >= nftReward + amount) {
+                    amount += nftReward;
+                }
+            }
+            if (amount > 0) count++;
+        }
+
+        // Second pass: fill correctly-sized array
+        EngagementRewardClaim[] memory engagementRewardsClaims = new EngagementRewardClaim[](count);
         uint256 index = 0;
         for (uint256 i = 1; i <= engagementRewardId; i++) {
-            if (isClaimedByUser[i][msg.sender]) {
-                continue;
-            }
-            uint256 amount = 0;
+            if (isClaimedByUser[i][msg.sender]) continue;
             EngagementReward memory reward = engagementRewards[i];
-            uint256 availableReward = totalClaimed[reward.token] -
-                engagementRewards[i].amountClaimed;
+            if (reward.token == address(0)) continue;
 
-            if (reward.token == address(0)) {
-                continue;
-            }
+            uint256 amount = 0;
+            uint256 availableReward = totalClaimed[reward.token] - reward.amountClaimed;
             uint256[] memory nftIds = IMemedWarriorNFT(
                 factory.getWarriorNFT(reward.token)
             ).getWarriorMintedBeforeByUser(msg.sender, reward.timestamp);
@@ -200,13 +220,12 @@ contract MemedEngageToEarn is Ownable, ReentrancyGuard {
                 }
             }
             if (amount > 0) {
-                engagementRewardsClaims[index] = EngagementRewardClaim(
+                engagementRewardsClaims[index++] = EngagementRewardClaim(
                     msg.sender,
                     i,
                     amount,
                     reward.token
                 );
-                index++;
             }
         }
 
@@ -244,7 +263,8 @@ contract MemedEngageToEarn is Ownable, ReentrancyGuard {
         uint256 amountOut = factory.swap(
             _loserAmount,
             path,
-            factory.getMemedBattle()
+            factory.getMemedBattle(),
+            1 // Minimum 1 token output for slippage protection
         );
 
         require(amountOut > 0, "Swap failed");
@@ -289,11 +309,7 @@ contract MemedEngageToEarn is Ownable, ReentrancyGuard {
 
     /// @notice Unlock creator incentives for a token
     /// @param _token The token address
-    function unlockCreatorIncentives(address _token) external {
-        require(
-            msg.sender == address(factory),
-            "Only factory can unlock creator incentives"
-        );
+    function unlockCreatorIncentives(address _token) external onlyFactory {
         if (block.timestamp > dayData[_token].creatorTimestamp + 1 days) {
             dayData[_token].creatorTimestamp = block.timestamp;
             dayData[_token].claimedByCreator = 0;
@@ -318,12 +334,9 @@ contract MemedEngageToEarn is Ownable, ReentrancyGuard {
 
     /// @notice Claim unlocked creator incentives
     /// @param _token The token address
-    function claimCreatorIncentives(address _token) external {
-        require(
-            msg.sender == creatorData[_token].creator,
-            "Only creator can claim"
-        );
+    function claimCreatorIncentives(address _token) external onlyFactory {
         uint256 amount = creatorData[_token].unlockedBalance;
+        require(amount > 0, "No incentives to claim");
         creatorData[_token].unlockedBalance = 0;
 
         IERC20(_token).transfer(creatorData[_token].creator, amount);
@@ -345,7 +358,7 @@ contract MemedEngageToEarn is Ownable, ReentrancyGuard {
     /// @notice Claim unclaimed tokens and set creator
     /// @param _token The token address
     /// @param to The creator address
-    function claimUnclaimedTokens(address _token, address to) external {
+    function claimUnclaimedTokens(address _token, address to) external onlyFactory {
         require(to != address(0), "Invalid address");
         require(
             creatorData[_token].creator == address(0),

@@ -14,7 +14,8 @@ interface IMemedFactory {
     function swap(
         uint256 _amount,
         address[] calldata _path,
-        address _to
+        address _to,
+        uint256 _minAmountOut
     ) external returns (uint256 amountOut);
     function getTokenById(uint256 _id) external view returns (TokenData memory);
     function getHeat(address _token) external view returns (uint256);

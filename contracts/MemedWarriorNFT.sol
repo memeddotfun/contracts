@@ -75,6 +75,10 @@ contract MemedWarriorNFT is ERC721URIStorage, Ownable, ReentrancyGuard {
             IERC20(memedToken).balanceOf(msg.sender) >= price,
             "Insufficient MEME tokens"
         );
+        require(
+            IERC20(memedToken).allowance(msg.sender, address(this)) >= price,
+            "Insufficient token allowance"
+        );
 
         _burnTokens(msg.sender, price);
 
@@ -247,6 +251,6 @@ contract MemedWarriorNFT is ERC721URIStorage, Ownable, ReentrancyGuard {
     /// @param _tokenId The NFT token ID to check
     /// @return Whether the NFT exists
     function _exists(uint256 _tokenId) internal view returns (bool) {
-        return _tokenId > 0 && _tokenId <= currentTokenId;
+        return _tokenId > 0 && _tokenId <= currentTokenId && _ownerOf(_tokenId) != address(0);
     }
 }

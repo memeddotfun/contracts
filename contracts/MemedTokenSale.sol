@@ -236,7 +236,7 @@ contract MemedTokenSale is Ownable, ReentrancyGuard {
     /// @return Whether the fair launch is active
     function getFairLaunchActive(address _t) public view returns (bool) {
         uint256 tid = tokenIdByAddress[_t];
-        if (tid == 0) return false;
+        if (tid == 0 || fairLaunchData[tid].createdAt == 0) return false;
         return fairLaunchData[tid].status == FairLaunchStatus.ACTIVE;
     }
 
